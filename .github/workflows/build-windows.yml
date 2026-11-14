@@ -26,18 +26,32 @@ jobs:
       FFMPEG_BASE: https://github.com/BtbN/FFmpeg-Builds/releases/download/latest
       YTDLP_BASE: https://github.com/yt-dlp/yt-dlp/releases/latest/download
     steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
+      # The repository name ends with a dot ("clipfinder."). Windows cannot make a folder whose name ends with a dot,
+      # so the usual checkout folder cannot exist: the code is fetched into a plain folder in the runner's temp space,
+      # and every step runs there. The access token is only passed for the fetch and is never stored in the folder.
+      - name: Get the code
+        working-directory: ${{ runner.temp }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $auth = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes("x-access-token:$env:GH_TOKEN"))
+          git init -q src
+          git -C src -c "http.extraHeader=AUTHORIZATION: basic $auth" fetch -q --depth 1 "https://github.com/${{ github.repository }}" "${{ github.sha }}"
+          if ($LASTEXITCODE -ne 0) { throw "could not fetch the code" }
+          git -C src checkout -q FETCH_HEAD
+          git -C src log -1 --oneline
 
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
       - name: Install Python packages
+        working-directory: ${{ runner.temp }}/src
         run: python -m pip install numpy==2.5.3 pyinstaller==6.22.3 pefile==2024.8.26
 
       - name: Download ffmpeg and yt-dlp and check their checksums
+        working-directory: ${{ runner.temp }}/src
         run: |
           $ErrorActionPreference = "Stop"
           $ProgressPreference = "SilentlyContinue"      # the progress bar makes Invoke-WebRequest very slow
@@ -71,11 +85,13 @@ jobs:
       - name: Run the tests (with the downloaded tools)
         # Some tests use Linux-only tricks (shell-script stand-ins), so a failure here is shown but does not stop the build.
         continue-on-error: true
+        working-directory: ${{ runner.temp }}/src
         run: |
           $env:PATH = "$PWD/tools;$env:PATH"
           python -W error::ResourceWarning -m unittest discover -s tests
 
       - name: Build ClipFinder.exe
+        working-directory: ${{ runner.temp }}/src
         run: |
           pyinstaller --noconfirm --distpath dist --workpath build packaging/clipfinder.spec
           Copy-Item tools dist/ClipFinder/tools -Recurse
@@ -85,23 +101,29 @@ jobs:
       - name: Check that the build carries everything it needs
         # Opens every program file, lists the DLLs it needs, and fails if one is neither inside the folder nor part of
         # Windows. Python, numpy, the Visual C++ runtime, the file dialog, ffmpeg, ffprobe and yt-dlp must all be inside.
+        working-directory: ${{ runner.temp }}/src
         run: python packaging/check_bundle.py dist/ClipFinder
 
       - name: Start the built program and use it (analyse a test video, make a clip)
         # --clean-env: the program gets no Python, ffmpeg or yt-dlp on PATH, so it can only use what it carries.
+        working-directory: ${{ runner.temp }}/src
         run: python packaging/smoke_exe.py dist/ClipFinder/ClipFinder.exe --require-tools --clean-env --ffmpeg-dir tools
 
       - name: Build the installer
+        working-directory: ${{ runner.temp }}/src
         run: |
           choco install innosetup -y --no-progress
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           if (-not (Test-Path $iscc)) { $iscc = "$env:ProgramFiles\Inno Setup 6\ISCC.exe" }
-          & $iscc "/DAppVersion=1.0.$env:GITHUB_RUN_NUMBER" packaging/clipfinder.iss
+          $ver = python -c "import clipfinder; print(clipfinder.__version__)"
+          if ($LASTEXITCODE -ne 0 -or -not $ver) { throw "could not read the version" }
+          & $iscc "/DAppVersion=$ver" packaging/clipfinder.iss
           if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed" }
           Get-ChildItem installer_out | Format-Table Name, Length
 
       - name: Install it silently, check and use the installed copy, then uninstall
         # The real installer, run like a user would, into a fresh folder: proves the installer itself has everything.
+        working-directory: ${{ runner.temp }}/src
         run: |
           $dir = Join-Path $env:RUNNER_TEMP "CF Installed"
           $log = Join-Path $env:RUNNER_TEMP "setup.log"
@@ -118,12 +140,13 @@ jobs:
 
       - name: Make the portable zip
         if: ${{ inputs.portable }}
+        working-directory: ${{ runner.temp }}/src
         run: Compress-Archive -Path dist/ClipFinder -DestinationPath installer_out/ClipFinder-portable.zip -CompressionLevel Optimal
 
       - name: Keep the result for 1 day
         uses: actions/upload-artifact@v4
         with:
           name: ClipFinder-Windows
-          path: installer_out/*
+          path: ${{ runner.temp }}/src/installer_out/*
           retention-days: 1
           if-no-files-found: error
