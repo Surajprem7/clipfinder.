@@ -1287,10 +1287,90 @@ class TestStaticRules(unittest.TestCase):
             if isinstance(node, ast.FunctionDef) and node.name == "explain":
                 codes |= {n.value for n in ast.walk(node) if isinstance(n, ast.Constant) and isinstance(n.value, str)
                           and re.fullmatch(r"[a-z_]+", n.value) and n.value != "other"}
-        known = set(re.findall(r"^\s{4}([a-z_]+):\s*\"", js, re.M))
-        quiet = {"other", "bad_request", "bad_json", "length_required", "uri_too_long", "no_picture", "bad_type"}
+        quiet = {"other", "bad_request", "bad_json", "length_required", "uri_too_long", "no_picture", "bad_type", "bad_lang"}
         self.assertGreater(len(codes), 15)
-        self.assertEqual(sorted(codes - known - quiet), [])
+        blocks = re.findall(r"^\s{6}err: \{\n(.*?)^\s{6}\},", js, re.M | re.S)
+        self.assertEqual(len(blocks), 2)                      # one per language
+        for block in blocks:
+            known = set(re.findall(r"^\s{8}([a-z_]+):\s*\"", block, re.M))
+            self.assertEqual(sorted(codes - known - quiet), [])
+
+
+class TestLanguageSetting(Base):
+    def test_language_is_malayalam_until_changed_and_then_remembered(self):
+        self.assertEqual(self.jget("/api/state")[1]["lang"], "ml")
+        code, _, body = self.req("POST", "/api/lang", {"lang": "en"})
+        self.assertEqual((code, json.loads(body)), (200, {"lang": "en"}))
+        self.assertEqual(self.jget("/api/state")[1]["lang"], "en")
+        self.assertEqual(w.load_lang(self.store.root), "en")
+        self.req("POST", "/api/lang", {"lang": "ml"})
+        self.assertEqual(w.load_lang(self.store.root), "ml")
+
+    def test_only_known_languages_are_accepted(self):
+        for bad in ("fr", "", None, 5, ["en"], "../x", "en\n"):
+            code, _, body = self.req("POST", "/api/lang", {"lang": bad})
+            self.assertEqual((code, json.loads(body)["error"]), (400, "bad_lang"), bad)
+        self.assertEqual(w.load_lang(self.store.root), "ml")
+
+    def test_a_damaged_prefs_file_falls_back_to_malayalam(self):
+        for content in ("{", "[]", '{"lang": "xx"}', '{"lang": 1}', "\x00"):
+            with open(os.path.join(self.store.root, "prefs.json"), "w", encoding="utf-8") as fh:
+                fh.write(content)
+            self.assertEqual(w.load_lang(self.store.root), "ml")
+        os.remove(os.path.join(self.store.root, "prefs.json"))
+
+
+class TestLanguages(unittest.TestCase):
+    """Malayalam and English: every text the page shows must exist in both."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.html = read(os.path.join(ROOT, "web", "index.html"))
+        cls.js = read(os.path.join(ROOT, "web", "app.js"))
+        ml = cls.js.index("    ml: {"); en = cls.js.index("    en: {"); end = cls.js.index("  const LANGS")
+        cls.ml, cls.en = cls.js[ml:en], cls.js[en:end]
+        page = cls.en.index("      page: {")
+        cls.en_page, cls.en_main = cls.en[page:], cls.en[:page]
+
+    @staticmethod
+    def keys(block, indent):
+        lines = [l for l in block.split("\n") if re.match(r" {%d}[a-z]" % indent, l)]
+        return {k for l in lines for k in re.findall(r"(?:^ {%d}|, )([a-z_0-9]+): " % indent, l)}
+
+    def test_both_languages_have_the_same_texts(self):
+        self.assertEqual(self.keys(self.ml, 6), self.keys(self.en, 6))
+        self.assertGreater(len(self.keys(self.ml, 6)), 80)
+
+    def test_every_text_the_script_asks_for_exists(self):
+        used = set(re.findall(r'\btr\("([a-z_0-9]+)"', self.js))
+        used |= set(re.findall(r'"(step_[a-z]+|t_[a-z]+)"', self.js))
+        self.assertEqual(sorted(used - self.keys(self.ml, 6)), [])
+        self.assertEqual(sorted(used - self.keys(self.en_main, 6)), [])
+
+    def test_every_marked_part_of_the_page_has_english(self):
+        marked = set(re.findall(r'data-i(?:-aria)?="([a-z_0-9]+)"', self.html))
+        self.assertGreater(len(marked), 60)
+        self.assertEqual(sorted(marked - self.keys(self.en_page, 8)), [])
+
+    def test_no_malayalam_text_is_left_unmarked_in_the_page(self):
+        body = self.html[self.html.index("<body>"):]
+        marked_spans = []
+        for m in re.finditer(r'<(\w+)[^>]*\sdata-i="[a-z_0-9]+"[^>]*>', body):
+            marked_spans.append((m.end(), body.index("</%s>" % m.group(1), m.end())))
+        for m in re.finditer(r"[\u0d00-\u0d7f]+", body):
+            inside = any(a <= m.start() < b for a, b in marked_spans) or m.group(0) == "മലയാളം"   # the language button
+            in_attr = body.rfind("<", 0, m.start()) > body.rfind(">", 0, m.start())   # inside a tag (aria-label)
+            self.assertTrue(inside or in_attr, body[max(0, m.start() - 60):m.start() + 20])
+        for m in re.finditer(r'aria-label="[^"]*[\u0d00-\u0d7f][^"]*"', body):
+            tag = body[body.rfind("<", 0, m.start()):m.end()]
+            self.assertTrue("data-i-aria=" in tag or 'id="lang-' in tag or "Language" in tag, tag)
+
+    def test_script_has_no_malayalam_outside_the_text_table(self):
+        rest = self.js[:self.js.index("  const TEXT = {")] + self.js[self.js.index("  const LANGS"):]
+        self.assertIsNone(re.search(r"[\u0d00-\u0d7f]", rest))
+
+    def test_english_text_has_no_malayalam(self):
+        self.assertIsNone(re.search(r"[\u0d00-\u0d7f]", self.en))
 
 
 def _browser_available():
@@ -1364,6 +1444,48 @@ class TestInBrowser(Base):
             b.close()
         self.assertEqual([l for l in logs if "status of 400" not in l[1]], [])      # (the 400 is the wrong name we sent on purpose)
 
+    def test_language_switch_changes_every_screen_text_and_is_remembered(self):
+        from playwright.sync_api import sync_playwright
+        logs = []
+        ml_re = re.compile(r"[\u0d00-\u0d7f]+")
+        with sync_playwright() as p:
+            b = p.chromium.launch()
+            ctx = b.new_context(viewport={"width": 1100, "height": 800})
+            pg = ctx.new_page()
+            pg.on("console", lambda m: logs.append((m.type, m.text)) if m.type in ("error", "warning") else None)
+            pg.on("pageerror", lambda e: logs.append(("pageerror", str(e))))
+            pg.goto(f"http://127.0.0.1:{self.port}/?t={TOKEN}")
+            pg.wait_for_selector("#s-home:not([hidden])")
+            self.assertEqual(pg.evaluate("document.documentElement.lang"), "ml")
+            ml_h1 = pg.inner_text("#s-home h1")
+            self.assertTrue(ml_re.search(ml_h1))
+            pg.click("#lang-en")
+            self.poll(pg, "document.documentElement.lang === 'en'")
+            self.assertEqual(pg.inner_text("#s-home h1"), "Which stream do you want clips from?")
+            self.assertEqual(pg.get_attribute("#lang-en", "aria-pressed"), "true")
+            # nothing Malayalam is left on the home screen except the language button and file names
+            visible = pg.inner_text("main") + pg.inner_text("header")
+            left = [w for w in ml_re.findall(visible) if w != "മലയാളം"]
+            self.assertEqual(left, [], visible)
+            pg.click("#open-settings")
+            pg.wait_for_selector("#settings[open]")
+            self.assertEqual(pg.inner_text("#settings-title"), "Settings")
+            self.assertIsNone(ml_re.search(pg.inner_text("#kv")))
+            self.assertEqual(pg.get_attribute("#open-settings", "aria-label"), "Settings")
+            pg.click("#settings-close")
+            # remembered after a reload
+            pg.reload()
+            pg.wait_for_selector("#s-home:not([hidden])")
+            self.poll(pg, "document.documentElement.lang === 'en'")
+            self.assertEqual(pg.inner_text("#lib-empty, #s-home h2").strip() != "", True)
+            # and back to Malayalam, exactly as before
+            pg.click("#lang-ml")
+            self.poll(pg, "document.documentElement.lang === 'ml'")
+            self.assertEqual(pg.inner_text("#s-home h1"), ml_h1)
+            self.assertEqual(pg.evaluate("document.documentElement.scrollWidth <= window.innerWidth"), True)
+            b.close()
+        self.assertEqual(logs, [])
+
     def test_a_remote_visitor_does_not_get_the_controls_for_this_computer(self):
         from playwright.sync_api import sync_playwright
         logs = []
@@ -1417,6 +1539,18 @@ class TestInBrowser(Base):
             pg.get_by_role("button", name="എല്ലാം").click()
             pg.wait_for_selector('#presets button[aria-pressed="true"]:text-is("എല്ലാം")', timeout=20000)
             self.assertEqual(pg.inner_text("#top-info"), all_info)
+            # the review screen in English, then back
+            sel_before = pg.locator(".clip.sel").count()
+            pg.click("#lang-en")
+            self.poll(pg, "document.documentElement.lang === 'en'")
+            pg.wait_for_selector('#presets button[aria-pressed="true"]:text-is("All")')
+            self.assertIn("clips found", pg.inner_text("#top-info"))
+            self.assertIn("selected", pg.inner_text("#rv-count"))
+            self.assertTrue(pg.inner_text(".clip .head").startswith("Clip "))
+            self.assertEqual(pg.locator(".clip.sel").count(), sel_before)          # the choice is kept
+            self.assertIsNone(re.search(r"[\u0d00-\u0d7f]", pg.inner_text("#s-review")))
+            pg.click("#lang-ml")
+            pg.wait_for_selector('#presets button[aria-pressed="true"]:text-is("എല്ലാം")')
             # make
             pg.click("#rv-go")
             pg.wait_for_selector("#s-make:not([hidden])")
@@ -1484,11 +1618,17 @@ class TestInBrowser(Base):
             pg = b.new_context(viewport={"width": 390, "height": 844}).new_page()
             pg.goto(f"http://127.0.0.1:{self.port}/?t={TOKEN}")
             pg.wait_for_selector("#s-home:not([hidden])")
-            for route, sel in ((f"#/review/{aid}", "#s-review:not([hidden])"), (f"#/make/{aid}", "#s-make:not([hidden])")):
-                pg.evaluate(f"location.hash = '{route}'")
-                pg.wait_for_selector(sel)
-                time.sleep(0.5)
-                self.assertTrue(pg.evaluate("document.documentElement.scrollWidth <= window.innerWidth"), route)
+            for lang in ("ml", "en"):
+                pg.click("#lang-" + lang)
+                self.poll(pg, f"document.documentElement.lang === '{lang}'")
+                for route, sel in (("#/", "#s-home:not([hidden])"), (f"#/review/{aid}", "#s-review:not([hidden])"),
+                                   (f"#/make/{aid}", "#s-make:not([hidden])")):
+                    pg.evaluate(f"location.hash = '{route}'")
+                    pg.wait_for_selector(sel)
+                    time.sleep(0.5)
+                    self.assertTrue(pg.evaluate("document.documentElement.scrollWidth <= window.innerWidth"), (lang, route))
+            pg.click("#lang-ml")
+            time.sleep(0.3)
             b.close()
 
     def test_wrong_link_shows_the_help_page_not_the_app(self):

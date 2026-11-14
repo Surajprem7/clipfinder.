@@ -32,6 +32,11 @@ button:disabled{opacity:.45;cursor:not-allowed}
 .brand{display:flex;align-items:center;gap:12px;font-size:20px;font-weight:700;letter-spacing:.2px}
 .top-title{font-size:20px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .back{min-height:44px;background:none;border:0;padding:0 8px 0 0;color:var(--muted);display:inline-flex;align-items:center;gap:8px;font-size:16px}
+.lang{display:flex;border:1px solid var(--line2);border-radius:12px;overflow:hidden;flex:none}
+.lang button{min-height:44px;padding:0 12px;background:transparent;border:0;color:var(--muted);font-size:14px}
+.lang button[aria-pressed="true"]{background:var(--surface);color:var(--text);font-weight:600}
+.lang button+button{border-left:1px solid var(--line2)}
+@media (max-width:620px){.top{gap:8px}.top-left,.top-right{gap:8px}#top-info{display:none !important}.lang button{padding:0 8px;font-size:13px}.brand span{display:none}.top-left{flex:1}.back{min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}}
 .icon-btn{width:44px;height:44px;border-radius:12px;border:1px solid var(--line2);background:transparent;display:flex;align-items:center;justify-content:center}
 
 /* alert */

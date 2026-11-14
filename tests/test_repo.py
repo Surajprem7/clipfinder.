@@ -163,3 +163,24 @@ class TestNothingElseHasToBeInstalled(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestRevisions(unittest.TestCase):
+    """Every revision is written down in CHANGELOG.md, newest first, and the program says which one it is."""
+
+    def test_the_newest_changelog_entry_is_the_program_version(self):
+        version = re.search(r'^__version__ = "([0-9.]+)"', read("clipfinder.py"), re.M).group(1)
+        found = re.findall(r"^## v([0-9.]+) \(\d{4}-\d{2}-\d{2}\)", read("CHANGELOG.md"), re.M)
+        self.assertTrue(found)
+        self.assertEqual(found[0], version)
+
+    def test_changelog_versions_only_go_up(self):
+        found = re.findall(r"^## v([0-9.]+) ", read("CHANGELOG.md"), re.M)
+        nums = [tuple(int(x) for x in v.split(".")) for v in found]
+        self.assertEqual(nums, sorted(nums, reverse=True))
+        self.assertEqual(len(nums), len(set(nums)))
+
+    def test_the_installer_gets_the_same_version(self):
+        wf = read(".github", "workflows", "build-windows.yml")
+        self.assertIn("clipfinder.__version__", wf)
+        self.assertIn('"/DAppVersion=$ver"', wf)

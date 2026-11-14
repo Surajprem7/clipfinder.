@@ -475,6 +475,26 @@ def save_remote_host(root: str, host: str | None) -> None:
     cf.atomic_write(path, "w", lambda fh: json.dump({"host": host}, fh), encoding="utf-8")
 
 
+LANGS = ("ml", "en")
+
+
+def load_lang(root: str) -> str:
+    """The page language the user chose (saved in prefs.json in the data folder). Malayalam until changed."""
+    try:
+        with open(os.path.join(root, "prefs.json"), encoding="utf-8") as fh:
+            lang = json.load(fh).get("lang")
+        return lang if lang in LANGS else "ml"
+    except (OSError, ValueError, AttributeError):
+        return "ml"
+
+
+def save_lang(root: str, lang) -> str:
+    if lang not in LANGS:
+        raise ApiError(400, "bad_lang")
+    cf.atomic_write(os.path.join(root, "prefs.json"), "w", lambda fh: json.dump({"lang": lang}, fh), encoding="utf-8")
+    return lang
+
+
 def remote_token(root: str) -> str:
     """A secret that stays the same between runs, so the link saved on the other device keeps working.
     (Used only when remote access is on. The file is readable by the owner only, where the system supports that.)"""
@@ -613,7 +633,7 @@ class App:
         return {"version": cf.__version__, "data_dir": self.store.root, "video_dir": self.store.videos,
                 "tools": self.tools(), "presets": PRESET_IDS, "videos": self.list_videos(),
                 "library": self.library(), "job": self.jobs.view(),
-                "detectors": {k: v[0] for k, v in cf.DETECTORS.items()}}
+                "detectors": {k: v[0] for k, v in cf.DETECTORS.items()}, "lang": load_lang(self.store.root)}
 
     def describe(self, aid: str) -> dict:
         meta = self.store.read_meta(aid)
@@ -1059,6 +1079,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(app.test_connector())
             if path == "/api/remote":
                 return self._json(app.set_remote(body.get("host")))
+            if path == "/api/lang":
+                return self._json({"lang": save_lang(app.store.root, body.get("lang"))})
             if path == "/api/cancel":
                 return self._json({"cancelled": app.jobs.cancel()})
             if path == "/api/open-folder":
@@ -1168,6 +1190,8 @@ NO_ACCESS_PAGE = """<!doctype html><html lang="ml"><head><meta charset="utf-8"><
 <body style="font-family:system-ui,'Noto Sans Malayalam',sans-serif;background:#14161b;color:#eceef2;padding:40px;line-height:1.6">
 <h1>ഈ പേജ് തുറക്കാൻ അനുമതി ഇല്ല</h1>
 <p>clipfinder ആരംഭിച്ച ടെർമിനലിൽ (കറുത്ത ജാലകത്തിൽ) കാണിച്ചിരിക്കുന്ന മുഴുവൻ ലിങ്ക് (<code>http://127.0.0.1:…/?t=…</code>) ബ്രൗസറിൽ തുറക്കുക.</p>
+<h2 lang="en">Not allowed to open this page</h2>
+<p lang="en">Open the full link (<code>http://127.0.0.1:…/?t=…</code>) shown in the terminal (the black window) where clipfinder was started.</p>
 </body></html>"""
 
 

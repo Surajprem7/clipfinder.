@@ -74,6 +74,7 @@ FIXED_TEXT = {
     "no_picture": "No picture could be made for that clip.",
     "bad_request": "The request has wrong values.",
     "no_space": "The disk is nearly full. Free some space first.",
+    "bad_lang": "Unknown page language (only ml and en).",
     "file_missing": "The video file is missing.",
     "bad_type": "That file type is not supported.",
     "internal": "An unexpected error happened inside ClipFinder.",
