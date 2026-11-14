@@ -84,6 +84,17 @@ class TestWindowsBuild(unittest.TestCase):
             self.assertEqual(raw.count(b"\n"), raw.count(b"\r\n"), name)
 
 
+    def test_windows_scripts_prove_python_runs_instead_of_trusting_where(self):
+        # "where python" also finds the Microsoft Store shortcut, which is not a real Python
+        for name in ("start_clipfinder.bat", "setup_windows.bat"):
+            text = "\n".join(l for l in read(name).splitlines() if not l.lstrip().lower().startswith("rem "))
+            self.assertNotIn("where python", text, name)
+            self.assertNotIn("where py ", text, name)
+            self.assertIn('py -3 -c "import sys"', text, name)
+            self.assertIn('python -c "import sys"', text, name)
+            self.assertIn("if not defined PY", text, name)
+
+
 class TestNothingElseHasToBeInstalled(unittest.TestCase):
     """The installer must carry Python, numpy, the Visual C++ runtime, the file dialog, ffmpeg, ffprobe and yt-dlp."""
 

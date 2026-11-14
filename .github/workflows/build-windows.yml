@@ -90,6 +90,21 @@ jobs:
           $env:PATH = "$PWD/tools;$env:PATH"
           python -W error::ResourceWarning -m unittest discover -s tests
 
+      - name: Check that start_clipfinder.bat finds a Python that really runs
+        # A copy of the real file where only the start line is changed: instead of starting the app it proves that the
+        # Python it found runs. (setup_windows.bat uses the same search.)
+        working-directory: ${{ runner.temp }}/src
+        run: |
+          $lines = Get-Content start_clipfinder.bat | ForEach-Object {
+            if ($_ -like '*clipfinder_web.py*') { '%PY% -c "import sys; print(''FOUND PYTHON '' + sys.version)"' }
+            elseif ($_ -match '^\s*pause\s*$') { 'rem (pause removed for the check)' }
+            else { $_ }
+          }
+          Set-Content check_start.bat $lines -Encoding ascii
+          $out = cmd /c check_start.bat 2>&1 | Out-String
+          Write-Host $out
+          if ($out -notmatch 'FOUND PYTHON') { throw "start_clipfinder.bat did not find a working Python" }
+
       - name: Build ClipFinder.exe
         working-directory: ${{ runner.temp }}/src
         run: |
