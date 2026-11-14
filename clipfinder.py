@@ -43,7 +43,7 @@ from dataclasses import dataclass, field, fields
 import numpy as np
 from numpy.lib.stride_tricks import sliding_window_view
 
-__version__ = "1.1.1"
+__version__ = "1.2.0"
 
 BIN = 0.5              # seconds per analysis bin
 SR = 16000             # audio sample rate used for analysis
@@ -987,8 +987,103 @@ def print_evaluation(res: dict, tolerance: float) -> None:
     print(f"\n(a candidate window counts if it comes within {tolerance:g}s of the marked moment)")
 
 
-def build_filter(layout: str, crop_x: float, width: int, height: int) -> str:
-    if layout == "crop" and width > 0 and height > 0 and width / height > 9 / 16 + 0.01:
+LAYOUTS = ("blur", "crop", "follow")
+FOLLOW_FPS = 8               # frames per second looked at to find where the action is
+FOLLOW_W, FOLLOW_H = 96, 54  # tiny grayscale frames are enough for that
+FOLLOW_MAX_KEYS = 120        # at most this many turning points in the crop path (keeps the ffmpeg command short)
+
+
+def wide_enough(width: int, height: int) -> bool:
+    """Is the picture wider than 9:16, so that a crop has room to move sideways?"""
+    return width > 0 and height > 0 and width / height > 9 / 16 + 0.01
+
+
+def follow_centres(frames: np.ndarray) -> np.ndarray:
+    """Where the action is in each frame: 0 = left edge .. 1 = right edge, NaN = nothing to go by.
+    frames: (n, h, w) grayscale. Movement shared by the whole picture (camera pans, cuts, flashes) is taken out
+    first, so what is left is something moving against the background."""
+    n, _, w = frames.shape
+    out = np.full(n, np.nan)
+    xs = (np.arange(w) + 0.5) / w
+    for i in range(1, n):
+        col = np.abs(frames[i] - frames[i - 1]).mean(axis=0)
+        extra = np.clip(col - np.median(col), 0.0, None)
+        if extra.mean() < 0.25 or col.mean() > 40.0:      # too quiet, or a hard cut / flash
+            continue
+        peak = extra >= 0.5 * extra.max()                 # the strongest part only, not faint movement elsewhere
+        out[i] = float((xs[peak] * extra[peak]).sum() / extra[peak].sum())
+    return out
+
+
+def follow_path(centres: np.ndarray, dur: float, view: float) -> list:
+    """Turn per-frame centres into a calm crop path: [(seconds, position 0..1), ...].
+    view: width of the crop as a share of the picture width. Gaps keep the last known place, the path is smoothed
+    over about 2 s and never moves faster than a quarter of the picture per second."""
+    n = len(centres)
+    if n == 0 or dur <= 0 or not 0.0 < view < 1.0:
+        return [(0.0, 0.5)]
+    c = np.array(centres, float)
+    known = np.flatnonzero(np.isfinite(c))
+    if len(known) == 0:
+        return [(0.0, 0.5)]
+    c[: known[0]] = c[known[0]]
+    for i in range(known[0] + 1, n):
+        if not np.isfinite(c[i]):
+            c[i] = c[i - 1]
+    step = dur / n
+    win = max(1, int(round(2.0 / step)))
+    if win > 1:
+        pad = np.concatenate([np.full(win, c[0]), c, np.full(win, c[-1])])
+        kernel = np.ones(win) / win
+        c = np.convolve(np.convolve(pad, kernel, mode="same"), kernel, mode="same")[win:-win]
+    pos = np.clip((c - view / 2) / (1 - view), 0.0, 1.0)
+    key_step = max(0.5, dur / FOLLOW_MAX_KEYS)
+    times = np.arange(0.0, dur + key_step / 2, key_step)
+    vals = np.interp(times, (np.arange(n) + 0.5) * step, pos)
+    limit = 0.25 / (1 - view) * key_step                 # a quarter of the picture width per second
+    for i in range(1, len(vals)):
+        vals[i] = vals[i - 1] + float(np.clip(vals[i] - vals[i - 1], -limit, limit))
+    return [(round(float(t), 3), round(float(v), 4)) for t, v in zip(times, vals)]
+
+
+def find_follow_path(video: str, start: float, dur: float, width: int, height: int) -> list:
+    """Look at one clip (small and gray) and work out the crop path that keeps the action in view."""
+    cmd = [tool("ffmpeg"), "-nostdin", "-v", "error", *FF_IN, "-ss", f"{start:.2f}", "-i", video, "-t", f"{dur:.2f}",
+           "-an", "-vf", f"fps={FOLLOW_FPS},scale={FOLLOW_W}:{FOLLOW_H}:flags=area,format=gray", "-f", "rawvideo", "-"]
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
+    size, frames = FOLLOW_W * FOLLOW_H, []
+    try:
+        while True:
+            if CANCEL.is_set():
+                proc.kill()
+                raise Cancelled()
+            buf = proc.stdout.read(size)
+            if len(buf) < size:
+                break
+            frames.append(np.frombuffer(buf, dtype=np.uint8).astype(np.float32).reshape(FOLLOW_H, FOLLOW_W))
+    finally:
+        proc.stdout.close()
+        proc.wait()
+    if len(frames) < 2:
+        return [(0.0, 0.5)]
+    view = (height * 9 / 16) / width
+    return follow_path(follow_centres(np.stack(frames)), dur, view)
+
+
+def path_expression(path: list) -> str:
+    """The crop path as an ffmpeg expression of t (seconds): straight lines between the turning points."""
+    terms = [f"{path[0][1]:.4f}"]
+    for (t0, v0), (t1, v1) in zip(path, path[1:]):
+        if t1 > t0 and abs(v1 - v0) >= 0.0001:
+            terms.append(f"{(v1 - v0) / (t1 - t0):+.5f}*clip(t-{t0:.3f},0,{t1 - t0:.3f})")
+    return "clip(" + "".join(terms) + ",0,1)"
+
+
+def build_filter(layout: str, crop_x: float, width: int, height: int, path: list | None = None) -> str:
+    if layout == "follow" and path and wide_enough(width, height):
+        return (f"[0:v]crop=w='trunc(ih*9/16/2)*2':h=ih:x='(iw-out_w)*{path_expression(path)}':y=0,"
+                f"scale=1080:1920,format=yuv420p[v]")
+    if layout == "crop" and wide_enough(width, height):
         return (f"[0:v]crop=w='trunc(ih*9/16/2)*2':h=ih:x='(iw-out_w)*{crop_x:.3f}':y=0,"
                 f"scale=1080:1920,format=yuv420p[v]")
     return ("[0:v]split=2[bg][fg];"
@@ -1027,10 +1122,12 @@ PROGRESS_KEYS = ("frame=", "fps=", "stream_", "bitrate=", "total_size=", "out_ti
 
 def render_clip(video: str, start: float, dur: float, target: str, layout: str, crop_x: float,
                 width: int, height: int, progress=None) -> None:
-    """Cut one clip into a 1080x1920 file. progress(fraction) is called while ffmpeg works."""
+    """Cut one clip into a 1080x1920 file. progress(fraction) is called while ffmpeg works.
+    layout 'follow' first looks at the clip to find where the action is, then crops along that path."""
+    path = find_follow_path(video, start, dur, width, height) if layout == "follow" and wide_enough(width, height) else None
     cmd = [tool("ffmpeg"), "-nostdin", "-y", "-v", "error", "-progress", "pipe:1", "-nostats", *FF_IN,
            "-ss", f"{start:.2f}", "-i", video, "-t", f"{dur:.2f}",
-           "-filter_complex", build_filter(layout, crop_x, width, height),
+           "-filter_complex", build_filter(layout, crop_x, width, height, path),
            "-map", "[v]", "-map", "0:a:0?", "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
            "-c:a", "aac", "-b:a", "160k", "-movflags", "+faststart", target]
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
@@ -1090,8 +1187,8 @@ def render_items(out: str, items: list, run: str | None = None, quiet: bool = Fa
         start, end = max(0.0, start), min(float(data["duration"]), end)
         if not (1.0 <= end - start <= 180.0):
             die("a clip must be between 1 and 180 seconds long")
-        if layout not in ("blur", "crop"):
-            die("layout must be 'blur' or 'crop'")
+        if layout not in LAYOUTS:
+            die("layout must be 'blur', 'crop' or 'follow'")
         if not 0.0 <= crop_x <= 1.0:
             die("crop position must be between 0 and 1")
         clean.append((cid, start, end - start, layout, crop_x, title[:120]))
@@ -1203,7 +1300,7 @@ def main(argv=None) -> int:
     r.add_argument("out", help="the analysis folder")
     r.add_argument("--ids", type=int, nargs="+", required=True)
     r.add_argument("--run", help="run id printed in report.html (protects against stale ids)")
-    r.add_argument("--layout", choices=["blur", "crop"], default="blur")
+    r.add_argument("--layout", choices=list(LAYOUTS), default="blur")
     r.add_argument("--crop-x", type=float, default=0.5, dest="crop_x", help="0=left .. 1=right (crop layout)")
     r.add_argument("--pad-pre", type=float, default=0.0, dest="pad_pre")
     r.add_argument("--pad-post", type=float, default=0.0, dest="pad_post")

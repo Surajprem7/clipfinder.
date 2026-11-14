@@ -757,7 +757,7 @@ class App:
             for v in (start, end, crop_x):
                 if isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v):
                     raise ApiError(400, "bad_request")
-            if layout not in ("blur", "crop") or not isinstance(title, str):
+            if layout not in cf.LAYOUTS or not isinstance(title, str):
                 raise ApiError(400, "bad_request")
             items.append({"id": cid, "start": start, "end": end, "layout": layout, "crop_x": crop_x,
                           "title": title})

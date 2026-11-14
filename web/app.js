@@ -114,6 +114,8 @@
       make_n: (n) => `${n} Shorts ഉണ്ടാക്കുക `,
       lay_blur: "ബ്ലർ പശ്ചാത്തലം", lay_blur_n: "ശുപാർശ",
       lay_crop: "ക്രോപ്പ്", lay_crop_n: "സ്ക്രീൻ നിറയും",
+      lay_follow: "ചലനം പിന്തുടരുക", lay_follow_n: "ക്രോപ്പ് ആക്ഷന്റെ കൂടെ നീങ്ങും",
+      follow_note: "ക്ലിപ്പ് ഉണ്ടാക്കുമ്പോൾ ക്രോപ്പ് സ്ക്രീനിൽ ചലനം ഉള്ള ഭാഗത്തെ പിന്തുടരും. ഇവിടെ കാണുന്നത് നടുഭാഗം മാത്രം; ശരിയായ ഫലം ഉണ്ടാക്കിയ ക്ലിപ്പിൽ കാണാം.",
       lay_cam: "ഫേസ്‌ക്യാം + ഗെയിം", lay_cam_n: "ഉടൻ വരും",
       secs: (n) => `${n} സെക്കൻഡ്`,
       play_part: "▶ ഈ ഭാഗം പ്ലേ ചെയ്യുക",
@@ -228,6 +230,8 @@
       make_n: (n) => `Make ${n} Shorts `,
       lay_blur: "Blurred background", lay_blur_n: "Recommended",
       lay_crop: "Crop", lay_crop_n: "Fills the screen",
+      lay_follow: "Follow the action", lay_follow_n: "The crop moves with the action",
+      follow_note: "When the clip is made, the crop follows the part of the screen that is moving. The preview here shows only the middle; the real result is in the finished clip.",
       lay_cam: "Facecam + game", lay_cam_n: "Coming soon",
       secs: (n) => `${n} seconds`,
       play_part: "▶ Play this part",
@@ -307,8 +311,8 @@
         lowres: "You are seeing a low-resolution copy. When making Shorts, only the chosen parts are downloaded from YouTube in 1080p.",
         saved_here: "Clips are saved on your computer",
         open_folder: "Open folder",
-        open_studio: "Open YouTube Studio",
-        upload_note: "Upload to YouTube yourself in Studio.",
+        open_studio: "Upload on YouTube",
+        upload_note: "Opens YouTube's upload box and the clips folder. Drag the clip from the folder into the box.",
         to_home: "Home",
         close: "Close",
         privacy: "Nothing is sent to the internet. Only when you use a YouTube link does yt-dlp use the internet to download that video.",
@@ -791,11 +795,13 @@
     const c = list.find((x) => x.id === state.cur), e = state.edits[c.id];
     $("mk-tabs").replaceChildren(...list.map((x) => h("button", { type: "button", class: "chip", "aria-pressed": x.id === state.cur ? "true" : "false",
       onclick: () => { state.cur = x.id; pausePreview(); drawMake(); } }, tr("clip_n", x.id))));
-    const defs = [["blur", tr("lay_blur"), tr("lay_blur_n")], ["crop", tr("lay_crop"), tr("lay_crop_n")], ["cam", tr("lay_cam"), tr("lay_cam_n")]];
+    const defs = [["blur", tr("lay_blur"), tr("lay_blur_n")], ["crop", tr("lay_crop"), tr("lay_crop_n")], ["follow", tr("lay_follow"), tr("lay_follow_n")], ["cam", tr("lay_cam"), tr("lay_cam_n")]];
     $("layouts").replaceChildren(...defs.map(([k, name, note]) => h("button", { type: "button", class: "layout", "aria-pressed": e.layout === k ? "true" : "false", disabled: k === "cam",
       onclick: () => { e.layout = k; drawMake(); } },
       h("span", { class: "mini " + k }), h("span", { class: "nm" }, h("b", null, name), h("span", null, note)))));
     $("crop-row").hidden = e.layout !== "crop";
+    $("follow-note").hidden = e.layout !== "follow";
+    $("follow-note").textContent = tr("follow_note");
     $("cropx").value = Math.round(e.crop_x * 100);
     const [lo, hi] = window_(c);
     for (const id of ["trim-a", "trim-b"]) { $(id).min = lo; $(id).max = hi; }
@@ -823,8 +829,8 @@
     $("trim-text").textContent = `${fmt(e.start)} – ${fmt(e.end)} · ${tr("secs", Math.round(e.end - e.start))}`;
     $("trim-a").setAttribute("aria-valuetext", fmt(e.start));
     $("trim-b").setAttribute("aria-valuetext", fmt(e.end));
-    $("phone").classList.toggle("crop", e.layout === "crop");
-    $("phone").style.setProperty("--cx", Math.round(e.crop_x * 100) + "%");
+    $("phone").classList.toggle("crop", e.layout === "crop" || e.layout === "follow");
+    $("phone").style.setProperty("--cx", (e.layout === "follow" ? 50 : Math.round(e.crop_x * 100)) + "%");
     $("ph-title").textContent = e.title;
   }
 
@@ -889,12 +895,15 @@
       return h("li", { class: "item" }, h("div", { class: "t" }, h("b", null, title), h("span", null, meta)),
         h("button", { type: "button", class: "ghost", "aria-label": tr("watch_x", title), onclick: () => openPlayer(id, f.file, title) }, tr("watch")));
     }));
-    $("dn-folder").onclick = async () => {
+    const openFolder = async () => {
       try {
         const res = await api("POST", "/api/open-folder", { id });
         if (!res.opened) { $("dn-path").textContent = tr("folder_fail_here", res.path); $("dn-path").hidden = false; }
       } catch (e) { showError(e); }
     };
+    $("dn-folder").onclick = openFolder;
+    // The upload link opens YouTube in the browser; on this PC the clips folder opens too, ready to drag from.
+    $("dn-studio").onclick = () => { if (!document.body.classList.contains("remote")) openFolder(); };
   }
   $("dn-home").addEventListener("click", () => go("#/"));
 

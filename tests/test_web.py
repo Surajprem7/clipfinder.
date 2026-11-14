@@ -282,7 +282,7 @@ class TestWorkflow(Base):
         # render two clips, one trimmed, one cropped
         c1, c2 = a["clips"][0], a["clips"][1]
         items = [
-            {"id": c1["id"], "start": c1["start"] + 2, "end": c1["start"] + 12, "layout": "blur", "crop_x": 0.5,
+            {"id": c1["id"], "start": c1["start"] + 2, "end": c1["start"] + 12, "layout": "follow", "crop_x": 0.5,
              "title": "ആദ്യത്തെ ക്ലിപ്പ്"},
             {"id": c2["id"], "start": c2["start"], "end": c2["start"] + 8, "layout": "crop", "crop_x": 0.2, "title": "../../evil"},
         ]
@@ -1252,7 +1252,7 @@ class TestStaticRules(unittest.TestCase):
         html_, js, css = (read(os.path.join(web, n)) for n in ("index.html", "app.js", "app.css"))
         for text in (html_, js, css):
             self.assertIsNone(re.search(r"(src|href|action)\s*=\s*[\"']\s*(https?:)?//", text.replace(
-                'href="https://studio.youtube.com"', "")), "outside address in a page file")
+                'href="https://www.youtube.com/upload"', "")), "outside address in a page file")
             self.assertNotIn("@import", text)
             self.assertIsNone(re.search(r"url\(\s*[\"']?(https?:)?//", css))
         self.assertIsNone(re.search(r"<script(?![^>]*\bsrc=)[^>]*>\s*\S", html_), "inline script")
@@ -1267,7 +1267,7 @@ class TestStaticRules(unittest.TestCase):
                    if not u.startswith(("http://www.w3.org/2000/svg", "https://www.youtube.com", "https://youtu.be"))}
         self.assertEqual(outside, set())
         self.assertEqual(sorted(set(re.findall(r"https?://[^\s\"'<>]+", html_))),
-                         ["http://www.w3.org/2000/svg", "https://studio.youtube.com", "https://www.youtube.com/watch?v=…"])
+                         ["http://www.w3.org/2000/svg", "https://www.youtube.com/upload", "https://www.youtube.com/watch?v=…"])
         self.assertIn('rel="noopener noreferrer"', html_)
 
     def test_every_element_the_script_looks_up_exists(self):
@@ -1559,9 +1559,15 @@ class TestInBrowser(Base):
             for _ in range(4):
                 pg.keyboard.press("ArrowRight")
             self.assertNotEqual(pg.inner_text("#trim-text"), before)
-            pg.get_by_role("button", name="ക്രോപ്പ്").click()
+            pg.locator("button.layout").nth(1).click()
             self.assertEqual(pg.get_attribute("#phone", "class"), "phone crop")
-            self.assertTrue(pg.locator("button.layout").nth(2).is_disabled())      # the coming-soon layout
+            self.assertTrue(pg.locator("button.layout").nth(3).is_disabled())      # the coming-soon layout
+            pg.locator("button.layout").nth(2).click()                             # follow the action
+            self.assertTrue(pg.is_visible("#follow-note"))
+            self.assertFalse(pg.is_visible("#crop-row"))
+            self.assertEqual(pg.get_attribute("#phone", "class"), "phone crop")
+            pg.locator("button.layout").nth(1).click()
+            self.assertFalse(pg.is_visible("#follow-note"))
             pg.fill("#title", "ടെസ്റ്റ് ക്ലിപ്പ്")
             self.assertEqual(pg.inner_text("#ph-title"), "ടെസ്റ്റ് ക്ലിപ്പ്")
             self.assertEqual(pg.evaluate("document.documentElement.scrollWidth <= window.innerWidth"), True)

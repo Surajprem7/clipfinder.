@@ -8,6 +8,7 @@ import ast
 import json
 import os
 import subprocess
+import shutil
 import sys
 import tempfile
 import unittest
@@ -324,6 +325,87 @@ class TestFlatScreen(unittest.TestCase):
     def test_bad_flat_setting_refused(self):
         with self.assertRaises(SystemExit):
             cf.normalize_params(cf.Params(flat_thr=-1))
+
+
+class TestFollowCrop(unittest.TestCase):
+    """Layout 'follow': the crop moves sideways to keep the action in the picture."""
+
+    def frames(self, xs, w=96, h=54):
+        out = np.full((len(xs), h, w), 30.0, dtype=np.float32)
+        for i, x in enumerate(xs):
+            if x is not None:
+                out[i, 20:30, int(x * (w - 8)):int(x * (w - 8)) + 8] = 250.0
+        return out
+
+    def test_centres_follow_a_moving_thing(self):
+        xs = list(np.linspace(0.1, 0.9, 40))
+        c = cf.follow_centres(self.frames(xs))
+        self.assertTrue(np.isnan(c[0]))
+        got = c[1:]
+        self.assertTrue(np.all(np.isfinite(got)))
+        self.assertLess(np.abs(got - np.array(xs[1:])).max(), 0.12)
+
+    def test_still_picture_and_whole_screen_change_give_no_centre(self):
+        still = cf.follow_centres(self.frames([0.5] * 10))
+        self.assertTrue(np.all(np.isnan(still)))
+        flash = np.stack([np.full((54, 96), v, dtype=np.float32) for v in (10, 240, 10, 240)])
+        self.assertTrue(np.all(np.isnan(cf.follow_centres(flash))))
+
+    def test_path_is_calm_and_stays_inside(self):
+        rng = np.random.default_rng(1)
+        centres = np.clip(0.5 + rng.normal(0, 0.3, 160), 0, 1)            # jumpy input, 20 s at 8 fps
+        centres[40:60] = np.nan
+        view = 0.316
+        path = cf.follow_path(centres, 20.0, view)
+        t = np.array([p[0] for p in path]); v = np.array([p[1] for p in path])
+        self.assertEqual(t[0], 0.0)
+        self.assertTrue(np.all((v >= 0) & (v <= 1)))
+        self.assertTrue(np.all(np.diff(t) > 0))
+        speed = np.abs(np.diff(v)) / np.diff(t) * (1 - view)             # share of the picture width per second
+        self.assertLessEqual(speed.max(), 0.25 + 1e-3)
+
+    def test_path_without_information_stays_in_the_middle(self):
+        self.assertEqual(cf.follow_path(np.full(50, np.nan), 6.0, 0.3), [(0.0, 0.5)])
+        self.assertEqual(cf.follow_path(np.zeros(0), 6.0, 0.3), [(0.0, 0.5)])
+
+    def test_long_clip_keeps_the_command_short(self):
+        path = cf.follow_path(np.linspace(0, 1, 180 * 8), 180.0, 0.316)
+        self.assertLessEqual(len(path), cf.FOLLOW_MAX_KEYS + 2)
+        self.assertLess(len(cf.path_expression(path)), 8000)
+
+    def test_expression_matches_the_path(self):
+        path = [(0.0, 0.2), (1.0, 0.6), (2.0, 0.6), (3.0, 0.1)]
+        expr = cf.path_expression(path)
+        self.assertRegex(expr, r"^clip\([0-9.+\-*t,clip()]+,0,1\)$")           # nothing but numbers, t and clip()
+        def value(t):
+            clip = lambda x, lo, hi: max(lo, min(hi, x))
+            return eval(expr, {"__builtins__": {}}, {"clip": clip, "t": t})
+        for t, want in ((0, 0.2), (0.5, 0.4), (1, 0.6), (1.5, 0.6), (2.5, 0.35), (3, 0.1), (9, 0.1)):
+            self.assertAlmostEqual(value(t), want, places=3)
+
+    def test_filter_falls_back_when_there_is_no_room_or_no_path(self):
+        self.assertIn("boxblur", cf.build_filter("follow", 0.5, 1080, 1920, [(0.0, 0.5)]))   # already upright
+        self.assertIn("boxblur", cf.build_filter("follow", 0.5, 1920, 1080, None))
+        self.assertIn("clip(", cf.build_filter("follow", 0.5, 1920, 1080, [(0.0, 0.5), (1.0, 0.7)]))
+
+    def test_rendered_clip_keeps_a_moving_thing_in_view(self):
+        tmp = tempfile.mkdtemp()
+        try:
+            src, out = os.path.join(tmp, "src.mp4"), os.path.join(tmp, "out.mp4")
+            subprocess.run([cf.tool("ffmpeg"), "-v", "error", "-y", "-f", "lavfi", "-i", "color=c=0x202830:s=640x360:r=30:d=12",
+                            "-f", "lavfi", "-i", "color=c=white:s=40x40:r=30:d=12",
+                            "-filter_complex", "[0][1]overlay=x='20+t/12*560':y=160[v]", "-map", "[v]",
+                            "-c:v", "libx264", "-pix_fmt", "yuv420p", src], check=True)
+            def box_positions(layout):
+                cf.render_clip(src, 0.0, 12.0, out, layout, 0.5, 640, 360)
+                raw = subprocess.run([cf.tool("ffmpeg"), "-v", "error", "-i", out, "-vf", "fps=1,scale=54:96,format=gray",
+                                      "-f", "rawvideo", "-"], capture_output=True, check=True).stdout
+                frames = np.frombuffer(raw, np.uint8).reshape(-1, 96, 54)
+                return [bool((f.max(axis=0) > 200).any()) for f in frames[2:10]]
+            self.assertTrue(all(box_positions("follow")))          # always in the picture
+            self.assertFalse(all(box_positions("crop")))           # a fixed crop loses it
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
 
 
 class TestEdgeCases(unittest.TestCase):

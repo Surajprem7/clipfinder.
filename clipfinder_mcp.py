@@ -191,7 +191,7 @@ TOOLS = [
      "annotations": {**READ, "title": "Ranked clips"}},
     {"name": "make_clips", "title": "Make Shorts clips",
      "description": "Make vertical 9:16 clips from chosen moments. Only the user's choice should be rendered. Each clip: id "
-                    "(from get_clips); optional start / end (seconds, 1-180 s long), layout 'blur' or 'crop', crop_x "
+                    "(from get_clips); optional start / end (seconds, 1-180 s long), layout 'blur', 'crop' or 'follow' (crop that follows the action), crop_x "
                     "(0-1), title. Returns a job id; watch it with get_job.",
      "inputSchema": schema({
          "analysis": ID_PROP,
@@ -199,7 +199,7 @@ TOOLS = [
          "clips": {"type": "array", "minItems": 1, "maxItems": MAX_CLIPS_PER_CALL, "items": schema({
              "id": {"type": "integer", "minimum": 1},
              "start": {"type": "number", "minimum": 0}, "end": {"type": "number", "minimum": 0},
-             "layout": {"type": "string", "enum": ["blur", "crop"], "default": "blur"},
+             "layout": {"type": "string", "enum": ["blur", "crop", "follow"], "default": "blur"},
              "crop_x": {"type": "number", "minimum": 0, "maximum": 1, "default": 0.5},
              "title": {"type": "string", "maxLength": 60}}, ["id"])}}, ["analysis", "run", "clips"]),
      "annotations": {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": True,
@@ -354,8 +354,8 @@ class Tools:
                 raise ToolError("start, end and crop_x must be numbers (crop_x from 0 to 1).")
             if not 1.0 <= end - start <= 180.0:
                 raise ToolError("A clip must be between 1 and 180 seconds long (end minus start).")
-            if layout not in ("blur", "crop") or not isinstance(title, str) or len(title) > 60:
-                raise ToolError("layout must be 'blur' or 'crop'; title at most 60 characters.")
+            if layout not in cf.LAYOUTS or not isinstance(title, str) or len(title) > 60:
+                raise ToolError("layout must be 'blur', 'crop' or 'follow'; title at most 60 characters.")
             items.append({"id": cid, "start": start, "end": end, "layout": layout, "crop_x": crop_x,
                           "title": clean_text(title, 60)})
         res = api(self.app.start_render, {"id": aid, "run": run, "items": items})
