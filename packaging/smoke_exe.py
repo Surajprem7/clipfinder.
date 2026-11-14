@@ -107,7 +107,7 @@ def main() -> int:
         a = json.loads(req("GET", f"/api/analysis/{aid}")[1])
         assert a["clips"], "no clips found in the test video"
         c = a["clips"][0]
-        items = [{"id": c["id"], "start": c["start"], "end": c["start"] + 8, "layout": "blur", "crop_x": 0.5, "title": "smoke"}]
+        items = [{"id": c["id"], "start": c["start"], "end": c["start"] + 8, "layout": "follow", "crop_x": 0.5, "title": "smoke"}]
         st, d = req("POST", "/api/render", {"id": aid, "run": a["run"], "items": items})
         assert st == 200, d
         job = wait_job()
@@ -115,7 +115,7 @@ def main() -> int:
         print("analysed", len(a["clips"]), "clips and rendered", len(job["result"]["files"]))
         # the Claude connector: the same program started the way Claude starts it, over stdin / stdout
         st, d = req("POST", "/api/connector-test", {})
-        assert st == 200 and json.loads(d) == {"ok": True, "tools": 7}, ("connector self-test", st, d)
+        assert st == 200 and json.loads(d) == {"ok": True, "tools": 8}, ("connector self-test", st, d)
         msgs = [{"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-06-18"}},
                 {"jsonrpc": "2.0", "method": "notifications/initialized"},
                 {"jsonrpc": "2.0", "id": 2, "method": "tools/list"},

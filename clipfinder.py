@@ -43,7 +43,7 @@ from dataclasses import dataclass, field, fields
 import numpy as np
 from numpy.lib.stride_tricks import sliding_window_view
 
-__version__ = "1.3.0"
+__version__ = "1.3.1"
 
 BIN = 0.5              # seconds per analysis bin
 SR = 16000             # audio sample rate used for analysis
