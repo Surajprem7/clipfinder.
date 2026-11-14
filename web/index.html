@@ -127,7 +127,9 @@
     <div class="spacer"></div>
     <div class="bottom">
       <div class="stack-xs">
-        <span id="rv-count" class="big-s"></span>
+        <div class="row"><span id="rv-count" class="big-s"></span>
+          <button type="button" id="rv-all" class="link-btn" data-i="sel_all">എല്ലാം തിരഞ്ഞെടുക്കുക</button>
+          <button type="button" id="rv-none" class="link-btn" data-i="sel_none">ഒന്നും വേണ്ട</button></div>
         <span class="muted small-t" data-i="rv_help">ചിത്രത്തിൽ ക്ലിക്ക് ചെയ്ത് തിരഞ്ഞെടുക്കുക · ▶ അമർത്തി കണ്ടുനോക്കാം</span>
       </div>
       <button type="button" id="rv-go" class="primary"><span data-i="make_shorts">Shorts ഉണ്ടാക്കുക</span> <span aria-hidden="true">→</span></button>
@@ -162,10 +164,12 @@
             <span class="muted" aria-hidden="true" data-i="crop_right">വലത്</span>
           </div>
           <p id="follow-note" class="muted small-t" hidden></p>
+          <div class="row"><button type="button" id="all-same" class="ghost small" hidden></button><span id="all-same-msg" class="muted small-t" role="status"></span></div>
         </fieldset>
 
         <div class="field">
           <div class="between"><span class="big-s" id="trim-label" data-i="length">ദൈർഘ്യം</span><span id="trim-text" class="muted"></span></div>
+          <p id="trim-long" class="note-box small-t" hidden></p>
           <div class="trim" role="group" aria-labelledby="trim-label">
             <div class="track"><i id="trim-fill"></i><b id="trim-peak" hidden></b></div>
             <input type="range" id="trim-a" data-i-aria="start" aria-label="തുടക്കം" step="0.5">

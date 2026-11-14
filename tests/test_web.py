@@ -713,7 +713,7 @@ class TestConnectorPanel(Base):
     def test_the_self_test_really_starts_the_connector(self):
         st, d = self.jpost("/api/connector-test")
         self.assertEqual(st, 200)
-        self.assertEqual(d, {"ok": True, "tools": 7})
+        self.assertEqual(d, {"ok": True, "tools": 8})
 
     def test_the_self_test_reports_a_broken_connector(self):
         app = self.srv.app
@@ -1427,7 +1427,7 @@ class TestInBrowser(Base):
             self.assertTrue(cmd.startswith("claude mcp add clipfinder -- "))
             self.assertTrue(cmd.endswith("--images"))
             pg.click("#cn-test")
-            self.poll(pg, "document.getElementById('cn-msg').textContent.indexOf('7') >= 0", timeout=60)
+            self.poll(pg, "document.getElementById('cn-msg').textContent.indexOf('8') >= 0", timeout=60)
             # the Tailscale part
             pg.click("#remote summary")
             self.poll(pg, "document.getElementById('rm-cmd').value.indexOf('tailscale serve') === 0")
@@ -1536,7 +1536,7 @@ class TestInBrowser(Base):
             all_info = pg.inner_text("#top-info")
             pg.get_by_role("button", name="സ്ലോ-മോഷൻ").click()
             pg.wait_for_selector('#presets button[aria-pressed="true"]:text-is("സ്ലോ-മോഷൻ")', timeout=20000)
-            pg.get_by_role("button", name="എല്ലാം").click()
+            pg.get_by_role("button", name="എല്ലാം", exact=True).click()
             pg.wait_for_selector('#presets button[aria-pressed="true"]:text-is("എല്ലാം")', timeout=20000)
             self.assertEqual(pg.inner_text("#top-info"), all_info)
             # the review screen in English, then back
@@ -1551,6 +1551,18 @@ class TestInBrowser(Base):
             self.assertIsNone(re.search(r"[\u0d00-\u0d7f]", pg.inner_text("#s-review")))
             pg.click("#lang-ml")
             pg.wait_for_selector('#presets button[aria-pressed="true"]:text-is("എല്ലാം")')
+            # select none / all, then back to the three that were chosen
+            chosen_ids = pg.evaluate("[...document.querySelectorAll('.clip.sel')].map(c => c.dataset.id)")
+            pg.click("#rv-none")
+            self.assertEqual(pg.locator(".clip.sel").count(), 0)
+            self.assertTrue(pg.is_disabled("#rv-go"))
+            pg.click("#rv-all")
+            self.assertEqual(pg.locator(".clip.sel").count(), pg.locator(".clip").count())
+            pg.click("#rv-none")
+            for cid in chosen_ids:
+                pg.locator(f'.clip[data-id="{cid}"] .pick').dispatch_event("click")
+            self.assertEqual(pg.locator(".clip.sel").count(), 3)
+            self.assertRegex(pg.inner_text(".clip .time"), r"\d+ സെക്കൻഡ്")           # the length is on the card
             # make
             pg.click("#rv-go")
             pg.wait_for_selector("#s-make:not([hidden])")
@@ -1568,6 +1580,14 @@ class TestInBrowser(Base):
             self.assertEqual(pg.get_attribute("#phone", "class"), "phone crop")
             pg.locator("button.layout").nth(1).click()
             self.assertFalse(pg.is_visible("#follow-note"))
+            # one press gives every clip this layout
+            self.assertTrue(pg.is_visible("#all-same"))
+            pg.click("#all-same")
+            self.assertNotEqual(pg.inner_text("#all-same-msg"), "")
+            pg.locator("#mk-tabs button").nth(1).click()
+            self.assertEqual(pg.get_attribute("button.layout >> nth=1", "aria-pressed"), "true")
+            pg.locator("#mk-tabs button").nth(0).click()
+            self.assertFalse(pg.is_visible("#trim-long"))                        # the clip is under a minute
             pg.fill("#title", "ടെസ്റ്റ് ക്ലിപ്പ്")
             self.assertEqual(pg.inner_text("#ph-title"), "ടെസ്റ്റ് ക്ലിപ്പ്")
             self.assertEqual(pg.evaluate("document.documentElement.scrollWidth <= window.innerWidth"), True)
@@ -1577,8 +1597,10 @@ class TestInBrowser(Base):
             aid = pg.url.split("#/done/")[1]
             self.assertEqual(pg.locator("#dn-list li").count(), 3)
             self.assertIn("ടെസ്റ്റ് ക്ലിപ്പ്", pg.inner_text("#dn-list"))
+            self.assertEqual(pg.locator("#dn-list li").first.locator("button").count(), 2)   # copy title + watch
+            self.assertEqual(pg.get_attribute("#dn-studio", "href"), "https://www.youtube.com/upload")
             # a made clip plays in the dialog
-            pg.locator("#dn-list button").first.click()
+            pg.locator("#dn-list li").first.locator("button").nth(1).click()
             pg.wait_for_selector("#player[open]")
             pg.click("#player-close")
             pg.click("#dn-home")

@@ -808,6 +808,37 @@ class App:
         return fetch
 
     # ---- pictures
+    def clip_frame(self, aid: str, clip_id: int, at: float | None = None) -> tuple:
+        """One small JPEG from a clip that was already made: (jpeg bytes, second used, clip length).
+        at: seconds into the clip (None = the middle). Only files directly inside this analysis's clips folder."""
+        self.store.load(aid)                                           # the analysis must exist
+        folder = os.path.realpath(os.path.join(self.store.adir(aid), "clips"))
+        prefix = f"clip_{int(clip_id):02d}_"
+        try:
+            names = [n for n in os.listdir(folder) if n.startswith(prefix) and n.endswith(".mp4")]
+        except OSError:
+            names = []
+        paths = [p for p in (os.path.join(folder, n) for n in names)
+                 if os.path.isfile(p) and os.path.dirname(os.path.realpath(p)) == folder]
+        if not paths:
+            raise ApiError(404, "not_found")
+        path = max(paths, key=os.path.getmtime)
+        try:
+            dur = float(cf.probe(path)["duration"])
+        except (SystemExit, KeyError, TypeError, ValueError):
+            raise ApiError(400, "unreadable") from None
+        when = min(max(0.0, dur - 0.2), dur / 2 if at is None else float(at))
+        cmd = [cf.tool("ffmpeg"), "-nostdin", "-v", "error", *cf.FF_IN, "-ss", f"{when:.2f}", "-i", path,
+               "-frames:v", "1", "-vf", "scale=270:480", "-f", "mjpeg", "-q:v", "5", "-"]
+        try:
+            with self.thumb_slots:
+                jpg = subprocess.run(cmd, capture_output=True, stdin=subprocess.DEVNULL, timeout=30).stdout
+        except (OSError, subprocess.TimeoutExpired):
+            jpg = b""
+        if not jpg.startswith(b"\xff\xd8") or len(jpg) > 400_000:
+            raise ApiError(400, "unreadable")
+        return jpg, when, dur
+
     def thumb(self, aid: str, clip_id: int) -> bytes:
         data = self.store.load(aid)
         cand = next((c for c in data["candidates"] if c["id"] == clip_id), None)

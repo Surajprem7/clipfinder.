@@ -126,7 +126,7 @@ def main() -> int:
         for line in res.stdout.splitlines():
             r = json.loads(line)                                  # every line on stdout must be protocol
             replies[r["id"]] = r
-        assert len(replies[2]["result"]["tools"]) == 7, replies.get(2)
+        assert len(replies[2]["result"]["tools"]) == 8, replies.get(2)
         clips = json.loads(replies[3]["result"]["content"][0]["text"])["clips"]
         assert clips, replies.get(3)
         print("connector OK:", len(replies[2]["result"]["tools"]), "tools,", len(clips), "clips")

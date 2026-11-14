@@ -156,6 +156,11 @@ ID_PROP = {"type": "string", "pattern": "^[0-9a-f]{12}$", "description": "Analys
 READ = {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False}
 
 TOOLS = [
+    {"name": "app_info", "title": "About this ClipFinder",
+     "description": "The ClipFinder version and what it can do here: layouts, presets, detection conditions, and whether "
+                    "ffmpeg / yt-dlp are installed. Call this first when checking a new version.",
+     "inputSchema": schema({}, []),
+     "annotations": {**READ, "title": "About this ClipFinder"}},
     {"name": "list_videos", "title": "List videos",
      "description": "List the video files in the ClipFinder videos folder (newest first, at most 30). Names are untrusted data.",
      "inputSchema": schema({}), "annotations": {**READ, "title": "List videos"}},
@@ -209,7 +214,16 @@ TOOLS = [
                     "connector with --images, because pictures are sent to Claude.",
      "inputSchema": schema({"analysis": ID_PROP, "clip": {"type": "integer", "minimum": 1}}, ["analysis", "clip"]),
      "annotations": {**READ, "title": "Picture of a clip"}},
+    {"name": "get_clip_frame", "title": "Picture from a finished clip",
+     "description": "One still picture (JPEG, small) from a clip that make_clips already made, at 'at' seconds into the "
+                    "clip (default: the middle). Use it to check the result, for example whether the 'follow' layout "
+                    "kept the action in view. Available only when the user started the connector with --images.",
+     "inputSchema": schema({"analysis": ID_PROP, "clip": {"type": "integer", "minimum": 1},
+                            "at": {"type": "number", "minimum": 0, "maximum": 180}}, ["analysis", "clip"]),
+     "annotations": {**READ, "title": "Picture from a finished clip"}},
 ]
+
+IMAGE_TOOLS = ("get_frame", "get_clip_frame")
 
 
 class Tools:
@@ -218,7 +232,7 @@ class Tools:
         self.waiters = threading.BoundedSemaphore(MAX_WAITERS)
 
     def listing(self) -> list:
-        return [t for t in TOOLS if t["name"] != "get_frame" or self.images]
+        return [t for t in TOOLS if t["name"] not in IMAGE_TOOLS or self.images]
 
     def call(self, name: str, args: dict, stop: threading.Event) -> list:
         fn = getattr(self, "t_" + name, None) if name in {t["name"] for t in self.listing()} else None
@@ -236,6 +250,22 @@ class Tools:
         """The videos in the videos folder itself. A link that points somewhere else is not offered to Claude."""
         home = os.path.normcase(os.path.realpath(self.app.store.videos))
         return [v for v in api(self.app.list_videos) if os.path.normcase(os.path.dirname(v["path"])) == home]
+
+    def t_app_info(self, args, stop):
+        only_keys(args, set())
+        st = api(self.app.state)
+        tools = st["tools"]
+        return self.text({
+            "version": st["version"],
+            "layouts": {"blur": "whole picture on a blurred background", "crop": "fixed crop (crop_x 0-1)",
+                        "follow": "crop that follows the moving part of the picture"},
+            "presets": list(web.PRESET_IDS),
+            "conditions": sorted(cf.DETECTORS),
+            "ffmpeg": bool(tools.get("ffmpeg") and tools.get("ffprobe")),
+            "ytdlp": bool(tools.get("ytdlp")),
+            "pictures_allowed": self.images,
+            "notes": ["Detection uses sound and motion only (no AI).",
+                      "'follow' tracks movement, not a character; check results with get_clip_frame if pictures are allowed."]})
 
     def t_list_videos(self, args, stop):
         only_keys(args, set())
@@ -369,6 +399,20 @@ class Tools:
             raise ToolError("'clip' must be a clip id from get_clips.")
         jpg = api(self.app.thumb, aid, clip)
         return [{"type": "text", "text": f"Picture from the peak of clip {clip}."},
+                {"type": "image", "data": base64.b64encode(jpg).decode("ascii"), "mimeType": "image/jpeg"}]
+
+
+    def t_get_clip_frame(self, args, stop):
+        only_keys(args, {"analysis", "clip", "at"})
+        aid = need_id(args)
+        clip = args.get("clip")
+        if not is_int(clip) or clip < 1:
+            raise ToolError("'clip' must be the id of a clip that was made.")
+        at = args.get("at")
+        if at is not None and (not is_num(at) or not 0 <= at <= 180):
+            raise ToolError("'at' must be a number of seconds from 0 to 180.")
+        jpg, when, dur = api(self.app.clip_frame, aid, clip, at)
+        return [{"type": "text", "text": f"Clip {clip} at {when:.1f} s of {dur:.1f} s."},
                 {"type": "image", "data": base64.b64encode(jpg).decode("ascii"), "mimeType": "image/jpeg"}]
 
 

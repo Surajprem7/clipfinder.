@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import ast
 import io
+import base64
 import json
 import os
 import queue
@@ -119,7 +120,7 @@ class TestProtocol(unittest.TestCase):
         self.assertEqual(r["serverInfo"]["name"], "clipfinder")
         self.assertIn("tools", r["capabilities"])
         tools = self.proc.rpc("tools/list")["result"]["tools"]
-        self.assertEqual([t["name"] for t in tools], ["list_videos", "analyze_video", "get_job", "cancel_job",
+        self.assertEqual([t["name"] for t in tools], ["app_info", "list_videos", "analyze_video", "get_job", "cancel_job",
                                                       "list_analyses", "get_clips", "make_clips"])
         self.assertNotIn("resultType", self.proc.rpc("tools/list")["result"])
 
@@ -300,6 +301,9 @@ class TestToolInputs(unittest.TestCase):
         r = self.proc.tool("get_frame", {"analysis": "0123456789ab", "clip": 1})
         self.assertEqual(r["error"]["code"], -32602)
         self.assertNotIn("get_frame", {t["name"] for t in self.proc.rpc("tools/list")["result"]["tools"]})
+        r = self.proc.tool("get_clip_frame", {"analysis": "0123456789ab", "clip": 1})
+        self.assertEqual(r["error"]["code"], -32602)
+        self.assertNotIn("get_clip_frame", {t["name"] for t in self.proc.rpc("tools/list")["result"]["tools"]})
 
     def test_no_dangerous_tool_exists(self):
         names = {t["name"] for t in self.proc.rpc("tools/list")["result"]["tools"]}
@@ -346,6 +350,13 @@ class TestEndToEnd(unittest.TestCase):
         self.assertEqual(p.data(p.tool("get_job")), {"job": None, "note": "No job has been started."})
         self.assertEqual(p.data(p.tool("cancel_job")), {"cancelled": False})
 
+        info = p.data(p.tool("app_info"))
+        self.assertEqual(info["version"], m.cf.__version__)
+        self.assertEqual(sorted(info["layouts"]), ["blur", "crop", "follow"])
+        self.assertTrue(info["ffmpeg"])
+        self.assertTrue(info["pictures_allowed"])
+        self.assertNotIn(self.tmp, json.dumps(info))                    # no folder paths
+
         start = p.data(p.tool("analyze_video", {"video": "my stream.mp4"}))
         self.assertTrue(start["started"])
         busy = p.tool("analyze_video", {"video": "my stream.mp4", "again": True})["result"]
@@ -373,7 +384,7 @@ class TestEndToEnd(unittest.TestCase):
         # picture (switched on in this test class)
         fr = p.tool("get_frame", {"analysis": aid, "clip": first["id"]})["result"]
         self.assertEqual(fr["content"][1]["type"], "image")
-        import base64
+
         self.assertEqual(base64.b64decode(fr["content"][1]["data"])[:3], b"\xff\xd8\xff")
         self.assertTrue(p.tool("get_frame", {"analysis": aid, "clip": 99999})["result"]["isError"])
 
@@ -389,8 +400,9 @@ class TestEndToEnd(unittest.TestCase):
         self.assertTrue(p.tool("make_clips", {"analysis": aid, "run": got["run"],
                                               "clips": [{"id": first["id"], "start": 5, "end": 5.2}]})["result"]["isError"])
 
+        self.assertTrue(p.tool("get_clip_frame", {"analysis": aid, "clip": first["id"]})["result"]["isError"])   # not made yet
         made = p.data(p.tool("make_clips", {"analysis": aid, "run": got["run"],
-                                            "clips": [{"id": first["id"], "title": "Great\nmoment <b>!"}]}))
+                                            "clips": [{"id": first["id"], "layout": "follow", "title": "Great\nmoment <b>!"}]}))
         self.assertTrue(made["started"])
         res = self.finish_job()
         self.assertEqual(res["state"], "done", res)
@@ -398,6 +410,16 @@ class TestEndToEnd(unittest.TestCase):
         f = os.path.join(res["folder"], res["files"][0]["file"])
         self.assertTrue(os.path.isfile(f) and os.path.getsize(f) > 1000)
         self.assertEqual(os.path.dirname(os.path.realpath(f)), os.path.realpath(res["folder"]))
+        # a picture from the finished clip (to check the result), small and upright
+        for extra in ({}, {"at": 1.5}, {"at": 170}):
+            cfr = p.tool("get_clip_frame", {"analysis": aid, "clip": first["id"], **extra})["result"]
+            jpg = base64.b64decode(cfr["content"][1]["data"])
+            self.assertEqual(jpg[:3], b"\xff\xd8\xff")
+            self.assertLess(len(jpg), 400_000)
+        for bad in ({"clip": 99999}, {"clip": first["id"], "at": -1}, {"clip": first["id"], "at": "x"},
+                    {"clip": "../x"}, {"clip": first["id"], "file": "x.mp4"}):
+            rr = p.tool("get_clip_frame", {"analysis": aid, **bad})
+            self.assertTrue("error" in rr or rr["result"]["isError"], bad)
         again = p.data(p.tool("get_clips", {"analysis": aid}))
         self.assertEqual(again["already_made"], [res["files"][0]["file"]])
 

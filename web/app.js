@@ -114,6 +114,14 @@
       make_n: (n) => `${n} Shorts ഉണ്ടാക്കുക `,
       lay_blur: "ബ്ലർ പശ്ചാത്തലം", lay_blur_n: "ശുപാർശ",
       lay_crop: "ക്രോപ്പ്", lay_crop_n: "സ്ക്രീൻ നിറയും",
+      sel_all: "എല്ലാം തിരഞ്ഞെടുക്കുക", sel_none: "ഒന്നും വേണ്ട",
+      all_same: (n) => `ഈ ലേഔട്ട് എല്ലാ ${n} ക്ലിപ്പിനും`,
+      all_same_done: "എല്ലാ ക്ലിപ്പിനും ഈ ലേഔട്ട് ആക്കി.",
+      long_clip: "60 സെക്കൻഡിൽ കൂടുതൽ. ചെറിയ Shorts ആണ് സാധാരണ കൂടുതൽ പേർ മുഴുവൻ കാണുന്നത്.",
+      copy_title: "ശീർഷകം പകർത്തുക",
+      copy_title_x: (t) => `${t}: ശീർഷകം പകർത്തുക`,
+      title_copied: "പകർത്തി",
+      link_fixed: "ബോക്സിൽ ഒന്നിലധികം ലിങ്ക് ഉണ്ടായിരുന്നു; അവസാനത്തേത് ഉപയോഗിച്ചു.",
       lay_follow: "ചലനം പിന്തുടരുക", lay_follow_n: "ക്രോപ്പ് ആക്ഷന്റെ കൂടെ നീങ്ങും",
       follow_note: "ക്ലിപ്പ് ഉണ്ടാക്കുമ്പോൾ ക്രോപ്പ് സ്ക്രീനിൽ ചലനം ഉള്ള ഭാഗത്തെ പിന്തുടരും. ഇവിടെ കാണുന്നത് നടുഭാഗം മാത്രം; ശരിയായ ഫലം ഉണ്ടാക്കിയ ക്ലിപ്പിൽ കാണാം.",
       lay_cam: "ഫേസ്‌ക്യാം + ഗെയിം", lay_cam_n: "ഉടൻ വരും",
@@ -230,6 +238,14 @@
       make_n: (n) => `Make ${n} Shorts `,
       lay_blur: "Blurred background", lay_blur_n: "Recommended",
       lay_crop: "Crop", lay_crop_n: "Fills the screen",
+      sel_all: "Select all", sel_none: "Select none",
+      all_same: (n) => `Use this layout for all ${n} clips`,
+      all_same_done: "All clips now use this layout.",
+      long_clip: "Longer than 60 seconds. Shorter Shorts are usually watched to the end by more people.",
+      copy_title: "Copy title",
+      copy_title_x: (t) => `${t}: copy title`,
+      title_copied: "Copied",
+      link_fixed: "The box had more than one link; the last one was used.",
       lay_follow: "Follow the action", lay_follow_n: "The crop moves with the action",
       follow_note: "When the clip is made, the crop follows the part of the screen that is moving. The preview here shows only the middle; the real result is in the finished clip.",
       lay_cam: "Facecam + game", lay_cam_n: "Coming soon",
@@ -294,6 +310,8 @@
         updating: "Updating…",
         rv_empty_big: "No clips found with this setting.",
         rv_empty_text: 'Move the slider above towards "More clips", or choose "All".',
+        sel_all: "Select all",
+        sel_none: "Select none",
         rv_help: "Click a picture to select it · press ▶ to preview",
         make_shorts: "Make Shorts",
         ph_fail: "This video cannot play in the browser. You can watch it after the clip is made.",
@@ -404,6 +422,7 @@
     result: null,       // last render result
     preview: null,      // card currently playing
     progress: null,     // [cfg, job] last drawn on the progress screen
+    lastLayout: "blur", // the layout chosen last; new clips start with it
   };
 
   // ------------------------------------------------------------------ errors
@@ -537,13 +556,17 @@
   }
 
   function submitLink() {
-    const v = $("link").value.trim();
+    let v = $("link").value.trim();
     if (!v) return $("link").focus();
+    // A link pasted on top of an older, unfinished one (two addresses stuck together): use the last one.
+    const at = v.toLowerCase().lastIndexOf("http");
+    if (at > 0 && /^https?:\/\//i.test(v)) { v = v.slice(at); $("link").value = v; }
     if (/^https?:\/\//i.test(v)) startAnalyze({ kind: "link", url: v }, () => tr("youtube_link"));
     else startAnalyze({ kind: "file", path: v }, base(v));
   }
   $("link-go").addEventListener("click", submitLink);
   $("link").addEventListener("keydown", (e) => { if (e.key === "Enter") submitLink(); });
+  $("link").addEventListener("focus", () => $("link").select());      // a paste then replaces what was there
 
   // ------------------------------------------------------------------ 2. progress (analysing and making)
   const STEPS_ANALYZE = [
@@ -676,7 +699,7 @@
     img.addEventListener("error", () => img.remove());
     const pick = h("button", { type: "button", class: "pick", "aria-pressed": on ? "true" : "false", "aria-label": tr("select_x", label), onclick: () => toggle(c.id) },
       h("span", { class: "dot" }, svg(ICON.check)),
-      h("span", { class: "time" }, `${fmt(c.start)} – ${fmt(c.end)}`));
+      h("span", { class: "time" }, `${fmt(c.start)} – ${fmt(c.end)} · ${tr("secs", Math.round(c.end - c.start))}`));
     const play = h("button", { type: "button", class: "play", "aria-label": tr("preview_x", label), onclick: (ev) => startPreview(card, c, thumb, ev.currentTarget) }, svg(ICON.play));
     const thumb = h("div", { class: "thumb" }, img, pick, a.source_ok ? play : null);
     const tags = c.tags.map((t) => h("span", { class: "tag" }, TEXT[lang].det[t] || state.app.detectors[t] || t));
@@ -707,6 +730,19 @@
     $("rv-go").disabled = n === 0 || !state.a || !state.a.source_ok;
   }
   $("rv-go").addEventListener("click", () => { if (state.a) go("#/make/" + state.a.id); });
+  function selectMany(all) {
+    if (!state.a) return;
+    state.sel = new Set(all ? state.a.clips.map((c) => c.id) : []);
+    for (const card of $("grid").querySelectorAll(".clip")) {
+      const on = state.sel.has(Number(card.dataset.id));
+      card.classList.toggle("sel", on);
+      const b = card.querySelector(".pick");
+      if (b) b.setAttribute("aria-pressed", on ? "true" : "false");
+    }
+    updateCount();
+  }
+  $("rv-all").addEventListener("click", () => selectMany(true));
+  $("rv-none").addEventListener("click", () => selectMany(false));
 
   function stopPreview() {
     const p = state.preview;
@@ -776,7 +812,7 @@
     const list = chosen();
     if (!list.length) return go("#/review/" + id);
     if (state.editsRun !== a.run) { state.edits = {}; state.editsRun = a.run; }
-    for (const c of list) if (!state.edits[c.id]) state.edits[c.id] = { start: c.start, end: c.end, layout: "blur", crop_x: 0.5, title: defaultTitle(c) };
+    for (const c of list) if (!state.edits[c.id]) state.edits[c.id] = { start: c.start, end: c.end, layout: state.lastLayout, crop_x: 0.5, title: defaultTitle(c) };
     if (!list.some((c) => c.id === state.cur)) state.cur = list[0].id;
     show("make", { back: tr("to_clips"), onBack: () => go("#/review/" + id) });
     $("mk-h1").textContent = tr("can_make", list.length);
@@ -797,8 +833,14 @@
       onclick: () => { state.cur = x.id; pausePreview(); drawMake(); } }, tr("clip_n", x.id))));
     const defs = [["blur", tr("lay_blur"), tr("lay_blur_n")], ["crop", tr("lay_crop"), tr("lay_crop_n")], ["follow", tr("lay_follow"), tr("lay_follow_n")], ["cam", tr("lay_cam"), tr("lay_cam_n")]];
     $("layouts").replaceChildren(...defs.map(([k, name, note]) => h("button", { type: "button", class: "layout", "aria-pressed": e.layout === k ? "true" : "false", disabled: k === "cam",
-      onclick: () => { e.layout = k; drawMake(); } },
+      onclick: () => { e.layout = k; state.lastLayout = k; $("all-same-msg").textContent = ""; drawMake(); } },
       h("span", { class: "mini " + k }), h("span", { class: "nm" }, h("b", null, name), h("span", null, note)))));
+    $("all-same").hidden = list.length < 2;
+    $("all-same").textContent = tr("all_same", list.length);
+    $("all-same").onclick = () => {
+      for (const x of list) { state.edits[x.id].layout = e.layout; state.edits[x.id].crop_x = e.crop_x; }
+      $("all-same-msg").textContent = tr("all_same_done");
+    };
     $("crop-row").hidden = e.layout !== "crop";
     $("follow-note").hidden = e.layout !== "follow";
     $("follow-note").textContent = tr("follow_note");
@@ -827,6 +869,8 @@
     $("trim-fill").style.setProperty("--l", ((e.start - lo) / span) * 100 + "%");
     $("trim-fill").style.setProperty("--w", ((e.end - e.start) / span) * 100 + "%");
     $("trim-text").textContent = `${fmt(e.start)} – ${fmt(e.end)} · ${tr("secs", Math.round(e.end - e.start))}`;
+    $("trim-long").hidden = e.end - e.start <= 60;
+    $("trim-long").textContent = tr("long_clip");
     $("trim-a").setAttribute("aria-valuetext", fmt(e.start));
     $("trim-b").setAttribute("aria-valuetext", fmt(e.end));
     $("phone").classList.toggle("crop", e.layout === "crop" || e.layout === "follow");
@@ -892,8 +936,13 @@
       const e = r.edits[f.id] || {};
       const title = e.title || f.file;
       const meta = tr("clip_n", f.id) + (e.end ? ` · ${tr("secs", Math.round(e.end - e.start))}` : "") + ` · ${fmtSize(f.size)}`;
+      const copy = h("button", { type: "button", class: "ghost", "aria-label": tr("copy_title_x", title), onclick: async () => {
+        try { await navigator.clipboard.writeText(title); copy.textContent = tr("title_copied"); }
+        catch (err) { showError({ code: "other" }); }
+      } }, tr("copy_title"));
       return h("li", { class: "item" }, h("div", { class: "t" }, h("b", null, title), h("span", null, meta)),
-        h("button", { type: "button", class: "ghost", "aria-label": tr("watch_x", title), onclick: () => openPlayer(id, f.file, title) }, tr("watch")));
+        h("div", { class: "row" }, copy,
+          h("button", { type: "button", class: "ghost", "aria-label": tr("watch_x", title), onclick: () => openPlayer(id, f.file, title) }, tr("watch"))));
     }));
     const openFolder = async () => {
       try {
