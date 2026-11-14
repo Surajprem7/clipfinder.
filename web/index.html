@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="ml">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>clipfinder</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'%3E%3Crect x='2' y='2' width='24' height='24' rx='7' fill='%23ff6a3d'/%3E%3Cpath d='M11 8.5v11l9-5.5z' fill='%2314161b'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<header class="top">
+  <div class="top-left">
+    <button type="button" id="back" class="back" hidden></button>
+    <div class="brand" id="brand">
+      <svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true"><rect x="2" y="2" width="24" height="24" rx="7" fill="#ff6a3d"/><path d="M11 8.5v11l9-5.5z" fill="#14161b"/></svg>
+      <span>clipfinder</span>
+    </div>
+    <span id="top-title" class="top-title" hidden></span>
+  </div>
+  <div class="top-right">
+    <span id="top-info" class="muted" hidden></span>
+    <button type="button" id="open-settings" class="icon-btn" aria-label="ക്രമീകരണങ്ങൾ">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+    </button>
+  </div>
+</header>
+
+<div id="alert" class="alert" role="alert" hidden></div>
+
+<main id="main">
+
+  <!-- 1. HOME -->
+  <section id="s-home" class="screen" hidden>
+    <h1 tabindex="-1">ഏത് സ്ട്രീമിൽ നിന്നാണ് ക്ലിപ്പ് വേണ്ടത്?</h1>
+
+    <div id="new-card" class="card new-card" hidden>
+      <div class="stack-s">
+        <span class="badge">പുതിയ വീഡിയോ കണ്ടെത്തി</span>
+        <span id="new-name" class="big"></span>
+        <span id="new-meta" class="muted"></span>
+      </div>
+      <button type="button" id="new-go" class="primary">വിശകലനം ചെയ്യുക <span aria-hidden="true">→</span></button>
+    </div>
+
+    <div id="empty-card" class="card" hidden>
+      <p class="big">ഇവിടെ തുടങ്ങാം</p>
+      <p class="muted">സ്ട്രീമിന്റെ വീഡിയോ താഴെ ഇടുക, അല്ലെങ്കിൽ YouTube Studio-വിൽ നിന്ന് ഡൗൺലോഡ് ചെയ്ത ഫയൽ ഈ ഫോൾഡറിൽ വയ്ക്കുക:</p>
+      <p><code id="empty-folder"></code></p>
+    </div>
+
+    <div class="two">
+      <div id="drop" class="drop" tabindex="-1">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg>
+        <span class="big-s">വീഡിയോ ഫയൽ ഇവിടെ ഇടുക</span>
+        <button type="button" id="pick" class="ghost local-only">ഫയൽ തിരഞ്ഞെടുക്കുക</button>
+        <input type="file" id="file-input" accept=".mp4,.mkv,.mov,.webm,.m4v,.ts,.avi,.flv,video/*" hidden>
+        <div id="upload" class="upload" hidden>
+          <span id="upload-text"></span>
+          <div class="bar"><i id="upload-bar"></i></div>
+        </div>
+      </div>
+      <div class="card link-card">
+        <label for="link" class="big-s">അല്ലെങ്കിൽ YouTube ലിങ്ക് ഒട്ടിക്കുക</label>
+        <div class="row">
+          <input id="link" type="text" class="text" placeholder="https://www.youtube.com/watch?v=…" autocomplete="off" spellcheck="false">
+          <button type="button" id="link-go" class="primary small">തുടങ്ങുക</button>
+        </div>
+        <span class="muted small-t">നിങ്ങളുടെ സ്വന്തം വീഡിയോ മാത്രം ഉപയോഗിക്കുക. കമ്പ്യൂട്ടറിലെ ഫയലിന്റെ പാത്ത് ഒട്ടിച്ചാലും മതി.</span>
+      </div>
+    </div>
+
+    <div class="stack">
+      <h2>മുൻപത്തെ സ്ട്രീമുകൾ</h2>
+      <p id="lib-empty" class="muted" hidden>ഇതുവരെ ഒന്നും വിശകലനം ചെയ്തിട്ടില്ല.</p>
+      <ul id="lib" class="list"></ul>
+    </div>
+  </section>
+
+  <!-- 2. PROGRESS (analysis and making) -->
+  <section id="s-progress" class="screen center" hidden>
+    <div class="card narrow">
+      <div class="stack-s">
+        <h1 id="pg-title" tabindex="-1"></h1>
+        <span id="pg-sub" class="muted"></span>
+      </div>
+      <div class="stack-s">
+        <div class="between">
+          <span id="pg-pct" class="big-s"></span>
+          <span id="pg-eta" class="muted"></span>
+        </div>
+        <div id="pg-bar" class="bar thick" role="progressbar" aria-label="പുരോഗതി" aria-valuemin="0" aria-valuemax="100"><i id="pg-fill"></i></div>
+      </div>
+      <ul id="pg-steps" class="steps" aria-live="polite"></ul>
+      <div class="between foot">
+        <span class="muted small-t" id="pg-note"></span>
+        <button type="button" id="pg-cancel" class="ghost">റദ്ദാക്കുക</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3. REVIEW -->
+  <section id="s-review" class="screen wide" hidden>
+    <h1 class="sr-only" tabindex="-1" id="rv-h1">ക്ലിപ്പുകൾ തിരഞ്ഞെടുക്കുക</h1>
+    <div class="controls">
+      <div class="row wrap">
+        <span class="big-s">എന്ത് കണ്ടെത്തണം?</span>
+        <div id="presets" class="row wrap"></div>
+      </div>
+      <div class="row slider-row">
+        <label for="sens" class="muted">കൂടുതൽ ക്ലിപ്പുകൾ</label>
+        <input id="sens" type="range" min="0" max="100" step="5" value="50">
+        <span class="muted" aria-hidden="true">കൂടുതൽ കൃത്യത</span>
+        <span id="rv-busy" class="muted" hidden>പുതുക്കുന്നു…</span>
+      </div>
+    </div>
+    <div id="rv-warn" class="note-box" hidden></div>
+    <div id="rv-empty" class="card" hidden>
+      <p class="big">ഈ ക്രമീകരണത്തിൽ ക്ലിപ്പുകൾ ഒന്നും കണ്ടെത്തിയില്ല.</p>
+      <p class="muted">മുകളിലെ സ്ലൈഡർ "കൂടുതൽ ക്ലിപ്പുകൾ" വശത്തേക്ക് നീക്കുക, അല്ലെങ്കിൽ "എല്ലാം" തിരഞ്ഞെടുക്കുക.</p>
+    </div>
+    <div id="grid" class="grid"></div>
+    <button type="button" id="more" class="ghost center-btn" hidden></button>
+    <div class="spacer"></div>
+    <div class="bottom">
+      <div class="stack-xs">
+        <span id="rv-count" class="big-s"></span>
+        <span class="muted small-t">ചിത്രത്തിൽ ക്ലിക്ക് ചെയ്ത് തിരഞ്ഞെടുക്കുക · ▶ അമർത്തി കണ്ടുനോക്കാം</span>
+      </div>
+      <button type="button" id="rv-go" class="primary">Shorts ഉണ്ടാക്കുക <span aria-hidden="true">→</span></button>
+    </div>
+  </section>
+
+  <!-- 4. MAKE -->
+  <section id="s-make" class="screen wide" hidden>
+    <div class="make">
+      <div class="phone-col">
+        <div id="phone" class="phone">
+          <img id="ph-bg" class="ph-bg" alt="" hidden>
+          <video id="ph-video" class="ph-video" preload="metadata" playsinline muted></video>
+          <div id="ph-fail" class="ph-fail" hidden>ബ്രൗസറിൽ ഈ വീഡിയോ പ്ലേ ചെയ്യാൻ കഴിയുന്നില്ല. ക്ലിപ്പ് ഉണ്ടാക്കിയ ശേഷം കാണാം.</div>
+          <span id="ph-title" class="ph-title"></span>
+        </div>
+        <button type="button" id="ph-play" class="ghost">▶ ഈ ഭാഗം പ്ലേ ചെയ്യുക</button>
+        <span class="muted small-t center-t">Shorts-ൽ ഇങ്ങനെ കാണും (9:16)</span>
+      </div>
+      <div class="make-form">
+        <div class="stack-s">
+          <h1 id="mk-h1" tabindex="-1"></h1>
+          <div id="mk-tabs" class="row wrap"></div>
+        </div>
+
+        <fieldset class="field">
+          <legend class="big-s">ലേഔട്ട്</legend>
+          <div id="layouts" class="layouts"></div>
+          <div id="crop-row" class="row slider-row" hidden>
+            <label for="cropx" class="muted">ഗെയിമിന്റെ ഇടത്</label>
+            <input id="cropx" type="range" min="0" max="100" step="1" value="50">
+            <span class="muted" aria-hidden="true">വലത്</span>
+          </div>
+        </fieldset>
+
+        <div class="field">
+          <div class="between"><span class="big-s" id="trim-label">ദൈർഘ്യം</span><span id="trim-text" class="muted"></span></div>
+          <div class="trim" role="group" aria-labelledby="trim-label">
+            <div class="track"><i id="trim-fill"></i><b id="trim-peak" hidden></b></div>
+            <input type="range" id="trim-a" aria-label="തുടക്കം" step="0.5">
+            <input type="range" id="trim-b" aria-label="അവസാനം" step="0.5">
+          </div>
+          <span class="muted small-t">വെള്ള അറ്റങ്ങൾ വലിച്ച് തുടക്കവും അവസാനവും മാറ്റാം (കീബോർഡിൽ ← → ഉപയോഗിക്കാം) · കറുത്ത വര = ഏറ്റവും തീവ്രമായ നിമിഷം</span>
+        </div>
+
+        <div class="field">
+          <label for="title" class="big-s">ശീർഷകം</label>
+          <input id="title" type="text" class="text" maxlength="100" autocomplete="off">
+          <span class="muted small-t">ഇത് ഫയലിന്റെ പേരായി ഉപയോഗിക്കും. YouTube-ൽ അപ്‌ലോഡ് ചെയ്യുമ്പോൾ ശീർഷകം അവിടെ നൽകുക.</span>
+        </div>
+
+        <p id="mk-lowres" class="note-box small-t" hidden>ഇവിടെ കാണുന്നത് ചെറിയ റെസല്യൂഷൻ കോപ്പിയാണ്. Shorts ഉണ്ടാക്കുമ്പോൾ തിരഞ്ഞെടുത്ത ഭാഗങ്ങൾ മാത്രം 1080p-യിൽ YouTube-ൽ നിന്ന് ഡൗൺലോഡ് ചെയ്യും.</p>
+
+        <div class="between make-foot">
+          <span class="muted small-t">ക്ലിപ്പുകൾ നിങ്ങളുടെ കമ്പ്യൂട്ടറിൽ സേവ് ആകും</span>
+          <button type="button" id="mk-go" class="primary">Shorts ഉണ്ടാക്കുക <span aria-hidden="true">→</span></button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5. DONE -->
+  <section id="s-done" class="screen center" hidden>
+    <div class="card wide-card">
+      <div class="row done-head">
+        <svg width="48" height="48" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="accent"><circle cx="24" cy="24" r="21"/><path d="M14 24.5l7 7 13-14"/></svg>
+        <div class="stack-xs">
+          <h1 id="dn-h1" tabindex="-1"></h1>
+          <span class="muted">1080 × 1920 · MP4</span>
+        </div>
+      </div>
+      <ul id="dn-list" class="list"></ul>
+      <div class="row wrap">
+        <button type="button" id="dn-folder" class="primary local-only">ഫോൾഡർ തുറക്കുക</button>
+        <a id="dn-studio" class="btn ghost" href="https://studio.youtube.com" target="_blank" rel="noopener noreferrer">YouTube Studio തുറക്കുക</a>
+      </div>
+      <p id="dn-path" class="muted small-t" hidden></p>
+      <div class="between foot">
+        <span class="muted small-t">YouTube-ലേക്ക് അപ്‌ലോഡ് ചെയ്യുന്നത് Studio-വിൽ നിങ്ങൾ തന്നെ ചെയ്യുക.</span>
+        <button type="button" id="dn-home" class="ghost">ഹോമിലേക്ക്</button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<dialog id="player" aria-labelledby="player-title">
+  <div class="dlg-head"><h2 id="player-title"></h2><button type="button" id="player-close" class="ghost small">അടയ്ക്കുക</button></div>
+  <video id="player-video" controls playsinline></video>
+</dialog>
+
+<dialog id="settings" aria-labelledby="settings-title">
+  <div class="dlg-head"><h2 id="settings-title">ക്രമീകരണങ്ങൾ</h2><button type="button" id="settings-close" class="ghost small">അടയ്ക്കുക</button></div>
+  <dl class="kv" id="kv"></dl>
+  <p class="muted small-t">ഒന്നും ഇന്റർനെറ്റിലേക്ക് അയയ്ക്കുന്നില്ല. YouTube ലിങ്ക് ഉപയോഗിക്കുമ്പോൾ മാത്രം yt-dlp ആ വീഡിയോ ഡൗൺലോഡ് ചെയ്യാൻ ഇന്റർനെറ്റ് ഉപയോഗിക്കും.</p>
+  <div class="row wrap">
+    <button type="button" id="st-folder" class="ghost local-only">വീഡിയോ ഫോൾഡർ തുറക്കുക</button>
+    <button type="button" id="st-update" class="ghost local-only">yt-dlp അപ്ഡേറ്റ് ചെയ്യുക</button>
+    <button type="button" id="st-quit" class="ghost local-only">ആപ്പ് അടയ്ക്കുക</button>
+  </div>
+  <p id="st-update-msg" class="muted small-t" role="status" hidden></p>
+  <details class="connect local-only" id="connect">
+    <summary>Claude-മായി ബന്ധിപ്പിക്കുക (ഓപ്ഷണൽ)</summary>
+    <p class="small-t">ബന്ധിപ്പിച്ചാൽ Claude-ൽ ടൈപ്പ് ചെയ്താൽ മതി, ഉദാ: “ഇന്നത്തെ സ്ട്രീമിലെ മികച്ച 5 നിമിഷങ്ങൾ കണ്ടെത്തി Shorts ആക്കൂ”. ആപ്പ് ഇല്ലാതെയും ഇതെല്ലാം ഇവിടെ തന്നെ ചെയ്യാം.</p>
+    <p class="muted small-t">Claude-ന് കിട്ടുന്നത്: ഫയൽ പേരുകൾ, ക്ലിപ്പ് സമയങ്ങളും സ്കോറും, ക്ലിപ്പ് ഫോൾഡറിന്റെ സ്ഥാനം. വീഡിയോ ഫയലുകൾ അയയ്ക്കുന്നില്ല. Claude-ന് ഈ ഫോൾഡറിനു പുറത്തുള്ള ഒന്നും വായിക്കാനോ ഡിലീറ്റ് ചെയ്യാനോ കഴിയില്ല.</p>
+    <label class="check"><input type="checkbox" id="cn-images"> ക്ലിപ്പിന്റെ ഒരു ചിത്രം (ഫ്രെയിം) Claude-ന് കാണാൻ അനുവദിക്കുക — ചിത്രങ്ങൾ Anthropic-ലേക്ക് അയയ്ക്കപ്പെടും</label>
+    <h3>Claude Desktop</h3>
+    <p class="small-t">Claude Desktop-ൽ: Settings → Developer → Edit Config. തുറക്കുന്ന <code>claude_desktop_config.json</code> ഫയലിൽ ഇത് ചേർക്കുക (ഫയലിൽ ഇതിനകം <code>mcpServers</code> ഉണ്ടെങ്കിൽ അതിനുള്ളിൽ <code>clipfinder</code> ഭാഗം മാത്രം ചേർക്കുക). സേവ് ചെയ്ത് Claude Desktop പൂർണ്ണമായി അടച്ച് വീണ്ടും തുറക്കുക.</p>
+    <textarea id="cn-json" class="code" rows="9" readonly spellcheck="false" aria-label="Claude Desktop ക്രമീകരണം"></textarea>
+    <div class="row wrap"><button type="button" id="cn-copy" class="ghost small">പകർത്തുക</button></div>
+    <h3>Claude Code</h3>
+    <textarea id="cn-cmd" class="code" rows="3" readonly spellcheck="false" aria-label="Claude Code കമാൻഡ്"></textarea>
+    <div class="row wrap"><button type="button" id="cn-copy2" class="ghost small">പകർത്തുക</button>
+      <button type="button" id="cn-test" class="ghost small">ഇവിടെ പരീക്ഷിക്കുക</button></div>
+    <p id="cn-msg" class="muted small-t" role="status" hidden></p>
+  </details>
+  <details class="connect local-only" id="remote">
+    <summary>മറ്റ് ഉപകരണങ്ങളിൽ നിന്ന് ഉപയോഗിക്കുക — Tailscale (ഓപ്ഷണൽ)</summary>
+    <p class="small-t">PC-യിൽ ClipFinder ഓടിക്കൊണ്ടിരിക്കുമ്പോൾ ഫോണിൽ/ലാപ്ടോപ്പിൽ നിന്ന് ഇതേ പേജ് തുറക്കാം. ഇന്റർനെറ്റിൽ പൊതുവായി ഒന്നും തുറക്കില്ല: നിങ്ങളുടെ Tailscale അക്കൗണ്ടിലെ ഉപകരണങ്ങൾക്ക് മാത്രം, കൂടാതെ രഹസ്യ ലിങ്കും വേണം.</p>
+    <ol class="small-t">
+      <li>PC-യിലും ഫോണിലും Tailscale ഇൻസ്റ്റാൾ ചെയ്ത് ഒരേ അക്കൗണ്ടിൽ ലോഗിൻ ചെയ്യുക. Tailscale അഡ്മിൻ പേജിൽ (DNS) MagicDNS, HTTPS certificates ഓൺ ചെയ്യുക.</li>
+      <li>താഴെ PC-യുടെ Tailscale പേര് (<code>പേര്.tailXXXX.ts.net</code>) കൊടുത്ത് സേവ് ചെയ്യുക. ClipFinder അടച്ച് വീണ്ടും തുറക്കുക.</li>
+      <li>PC-യിൽ ഈ കമാൻഡ് ഒരിക്കൽ ഓടിക്കുക (<code>tailscale serve</code> മാത്രം; <code>funnel</code> ഉപയോഗിക്കരുത്, അത് പൊതുവായി തുറക്കും).</li>
+      <li>താഴെ കാണുന്ന ലിങ്ക് ഫോണിൽ തുറക്കുക.</li>
+    </ol>
+    <label for="rm-host" class="small-t">PC-യുടെ Tailscale പേര്</label>
+    <div class="row wrap"><input type="text" id="rm-host" class="wide" autocomplete="off" spellcheck="false" placeholder="pc.tail1234.ts.net">
+      <button type="button" id="rm-save" class="ghost small">സേവ് ചെയ്യുക</button></div>
+    <p class="muted small-t">കമാൻഡ്:</p>
+    <textarea id="rm-cmd" class="code" rows="1" readonly spellcheck="false" aria-label="Tailscale കമാൻഡ്"></textarea>
+    <div id="rm-linkbox" hidden>
+      <p class="muted small-t">നിങ്ങളുടെ ലിങ്ക് (രഹസ്യമായി സൂക്ഷിക്കുക, ആരുമായും പങ്കിടരുത്):</p>
+      <textarea id="rm-link" class="code" rows="2" readonly spellcheck="false" aria-label="റിമോട്ട് ലിങ്ക്"></textarea>
+      <div class="row wrap"><button type="button" id="rm-copy" class="ghost small">ലിങ്ക് പകർത്തുക</button></div>
+    </div>
+    <p id="rm-msg" class="muted small-t" role="status" hidden></p>
+  </details>
+</dialog>
+
+<script src="/app.js"></script>
+</body>
+</html>

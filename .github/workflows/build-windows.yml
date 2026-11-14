@@ -1,0 +1,129 @@
+name: Build Windows installer
+
+# Run it by hand: GitHub > Actions > "Build Windows installer" > Run workflow.
+# Result: ClipFinder-Setup.exe in the "Artifacts" box at the bottom of the run page (kept for 1 day only,
+# so the free storage never fills up). No videos are involved anywhere in this build.
+on:
+  workflow_dispatch:
+    inputs:
+      portable:
+        description: "Also make a portable zip (no installer needed)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-2022
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      FFMPEG_ZIP: ffmpeg-n8.1-latest-win64-gpl-8.1.zip
+      FFMPEG_BASE: https://github.com/BtbN/FFmpeg-Builds/releases/download/latest
+      YTDLP_BASE: https://github.com/yt-dlp/yt-dlp/releases/latest/download
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python packages
+        run: python -m pip install numpy==2.5.3 pyinstaller==6.22.3 pefile==2024.8.26
+
+      - name: Download ffmpeg and yt-dlp and check their checksums
+        run: |
+          $ErrorActionPreference = "Stop"
+          $ProgressPreference = "SilentlyContinue"      # the progress bar makes Invoke-WebRequest very slow
+          New-Item -ItemType Directory -Force tools_dl, tools | Out-Null
+
+          function Get-Wanted($sumsFile, $name) {
+            foreach ($line in Get-Content $sumsFile) {
+              $parts = $line.Trim() -split "\s+", 2
+              if ($parts.Count -eq 2 -and ([System.IO.Path]::GetFileName($parts[1].TrimStart("*")) -eq $name)) { return $parts[0].ToLower() }
+            }
+            throw "no checksum listed for $name"
+          }
+          function Get-Checked($url, $sumsUrl, $name) {
+            Invoke-WebRequest $url -OutFile "tools_dl/$name"
+            Invoke-WebRequest $sumsUrl -OutFile "tools_dl/$name.sums"
+            $want = Get-Wanted "tools_dl/$name.sums" $name
+            $got = (Get-FileHash "tools_dl/$name" -Algorithm SHA256).Hash.ToLower()
+            if ($want -ne $got) { throw "checksum of $name does not match ($got instead of $want)" }
+            Write-Host "$name OK ($got)"
+          }
+
+          Get-Checked "$env:FFMPEG_BASE/$env:FFMPEG_ZIP" "$env:FFMPEG_BASE/checksums.sha256" $env:FFMPEG_ZIP
+          Get-Checked "$env:YTDLP_BASE/yt-dlp.exe" "$env:YTDLP_BASE/SHA2-256SUMS" "yt-dlp.exe"
+
+          Expand-Archive "tools_dl/$env:FFMPEG_ZIP" -DestinationPath tools_dl/ffmpeg
+          $bin = Get-ChildItem tools_dl/ffmpeg -Recurse -Directory -Filter bin | Select-Object -First 1
+          Copy-Item "$($bin.FullName)/ffmpeg.exe", "$($bin.FullName)/ffprobe.exe" tools
+          Copy-Item tools_dl/yt-dlp.exe tools
+          Get-ChildItem tools | Format-Table Name, Length
+
+      - name: Run the tests (with the downloaded tools)
+        # Some tests use Linux-only tricks (shell-script stand-ins), so a failure here is shown but does not stop the build.
+        continue-on-error: true
+        run: |
+          $env:PATH = "$PWD/tools;$env:PATH"
+          python -W error::ResourceWarning -m unittest discover -s tests
+
+      - name: Build ClipFinder.exe
+        run: |
+          pyinstaller --noconfirm --distpath dist --workpath build packaging/clipfinder.spec
+          Copy-Item tools dist/ClipFinder/tools -Recurse
+          Copy-Item packaging/THIRD_PARTY.txt dist/ClipFinder/
+          Get-ChildItem dist/ClipFinder | Format-Table Name, Length
+
+      - name: Check that the build carries everything it needs
+        # Opens every program file, lists the DLLs it needs, and fails if one is neither inside the folder nor part of
+        # Windows. Python, numpy, the Visual C++ runtime, the file dialog, ffmpeg, ffprobe and yt-dlp must all be inside.
+        run: python packaging/check_bundle.py dist/ClipFinder
+
+      - name: Start the built program and use it (analyse a test video, make a clip)
+        # --clean-env: the program gets no Python, ffmpeg or yt-dlp on PATH, so it can only use what it carries.
+        run: python packaging/smoke_exe.py dist/ClipFinder/ClipFinder.exe --require-tools --clean-env --ffmpeg-dir tools
+
+      - name: Build the installer
+        run: |
+          choco install innosetup -y --no-progress
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { $iscc = "$env:ProgramFiles\Inno Setup 6\ISCC.exe" }
+          & $iscc "/DAppVersion=1.0.$env:GITHUB_RUN_NUMBER" packaging/clipfinder.iss
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed" }
+          Get-ChildItem installer_out | Format-Table Name, Length
+
+      - name: Install it silently, check and use the installed copy, then uninstall
+        # The real installer, run like a user would, into a fresh folder: proves the installer itself has everything.
+        run: |
+          $dir = Join-Path $env:RUNNER_TEMP "CF Installed"
+          $log = Join-Path $env:RUNNER_TEMP "setup.log"
+          $p = Start-Process -FilePath installer_out/ClipFinder-Setup.exe -Wait -PassThru -ArgumentList @("/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-", "/DIR=`"$dir`"", "/LOG=`"$log`"")
+          if ($p.ExitCode -ne 0) { Get-Content $log -Tail 40; throw "the installer failed (exit code $($p.ExitCode))" }
+          python packaging/check_bundle.py "$dir"
+          if ($LASTEXITCODE -ne 0) { throw "the installed copy is missing something" }
+          python packaging/smoke_exe.py "$dir/ClipFinder.exe" --require-tools --clean-env --ffmpeg-dir tools
+          if ($LASTEXITCODE -ne 0) { throw "the installed copy does not work" }
+          Start-Process -FilePath "$dir/unins000.exe" -Wait -ArgumentList @("/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART")
+          for ($i = 0; $i -lt 30 -and (Test-Path "$dir/ClipFinder.exe"); $i++) { Start-Sleep -Seconds 1 }
+          if (Test-Path "$dir/ClipFinder.exe") { throw "the uninstaller did not remove the program" }
+          Write-Host "install, use and uninstall all worked"
+
+      - name: Make the portable zip
+        if: ${{ inputs.portable }}
+        run: Compress-Archive -Path dist/ClipFinder -DestinationPath installer_out/ClipFinder-portable.zip -CompressionLevel Optimal
+
+      - name: Keep the result for 1 day
+        uses: actions/upload-artifact@v4
+        with:
+          name: ClipFinder-Windows
+          path: installer_out/*
+          retention-days: 1
+          if-no-files-found: error

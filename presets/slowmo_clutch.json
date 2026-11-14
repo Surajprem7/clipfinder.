@@ -1,0 +1,7 @@
+{
+  "name": "slowmo_clutch",
+  "use": ["slow_motion", "quiet_then_burst", "loud_peak", "motion_burst"],
+  "weights": {"slow_motion": 2.0, "quiet_then_burst": 1.5, "loud_peak": 0.8, "motion_burst": 0.8},
+  "top": 15,
+  "min_score": 0.3
+}

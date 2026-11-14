@@ -1,0 +1,15 @@
+ClipFinder - third-party programs that travel inside the installer
+==================================================================
+
+ClipFinder itself is the user's own tool. The installer also contains these separate programs, which are NOT
+part of ClipFinder's own code and keep their own licences:
+
+* ffmpeg and ffprobe  - https://ffmpeg.org  (build from https://github.com/BtbN/FFmpeg-Builds, "gpl" variant,
+                        needed for the H.264 encoder). Licence: GNU GPL v3 for this build. The source code is
+                        available from those two addresses.
+* yt-dlp              - https://github.com/yt-dlp/yt-dlp  (The Unlicense - public domain)
+* Python and numpy    - https://www.python.org (PSF licence), https://numpy.org (BSD licence)
+* PyInstaller         - https://pyinstaller.org (GPL with an exception that allows packaging any program)
+
+If ClipFinder-Setup.exe is ever passed on to other people, these licences apply to those parts. For use on
+your own computer nothing further is needed.
