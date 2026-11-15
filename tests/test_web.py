@@ -1216,7 +1216,7 @@ class TestStaticRules(unittest.TestCase):
     """Rules about the code and page files themselves."""
     ALLOWED = {"argparse", "errno", "hashlib", "hmac", "http", "importlib", "json", "math", "os", "re", "secrets", "shutil",
                "subprocess", "sys", "threading", "time", "traceback", "webbrowser", "urllib", "clipfinder", "__future__",
-               "tkinter", "clipfinder_mcp", "clipfinder_youtube", "fcntl", "msvcrt"}                # tkinter: only the file dialog, in its own process
+               "tkinter", "clipfinder_mcp", "clipfinder_youtube", "clipfinder_ai", "clipfinder_update", "fcntl", "msvcrt"}                # tkinter: only the file dialog, in its own process
     FORBIDDEN_CALLS = {"eval", "exec", "compile", "__import__"}
 
     def tree(self):
@@ -1252,7 +1252,8 @@ class TestStaticRules(unittest.TestCase):
         html_, js, css = (read(os.path.join(web, n)) for n in ("index.html", "app.js", "app.css"))
         for text in (html_, js, css):
             self.assertIsNone(re.search(r"(src|href|action)\s*=\s*[\"']\s*(https?:)?//", text.replace(
-                'href="https://www.youtube.com/upload"', "")), "outside address in a page file")
+                'href="https://www.youtube.com/upload"', "").replace('href="https://github.com/Surajprem7/clipfinder."', "")),
+                "outside address in a page file")
             self.assertNotIn("@import", text)
             self.assertIsNone(re.search(r"url\(\s*[\"']?(https?:)?//", css))
         self.assertIsNone(re.search(r"<script(?![^>]*\bsrc=)[^>]*>\s*\S", html_), "inline script")
@@ -1268,7 +1269,8 @@ class TestStaticRules(unittest.TestCase):
                                         "https://studio.youtube.com/video/", "https://accounts.google.com/"))}
         self.assertEqual(outside, set())
         self.assertEqual(sorted(set(re.findall(r"https?://[^\s\"'<>]+", html_))),
-                         ["http://www.w3.org/2000/svg", "https://www.youtube.com/upload", "https://www.youtube.com/watch?v=…"])
+                         ["http://www.w3.org/2000/svg", "https://github.com/Surajprem7/clipfinder.", "https://www.youtube.com/upload",
+                          "https://www.youtube.com/watch?v=…"])
         self.assertIn('rel="noopener noreferrer"', html_)
 
     def test_every_element_the_script_looks_up_exists(self):
@@ -1598,10 +1600,10 @@ class TestInBrowser(Base):
             aid = pg.url.split("#/done/")[1]
             self.assertEqual(pg.locator("#dn-list li").count(), 3)
             self.assertIn("ടെസ്റ്റ് ക്ലിപ്പ്", pg.inner_text("#dn-list"))
-            self.assertEqual(pg.locator("#dn-list li").first.locator("button").count(), 2)   # copy title + watch
+            self.assertEqual(pg.locator("#dn-list li").first.locator("button").count(), 3)   # details + copy title + watch
             self.assertEqual(pg.get_attribute("#dn-studio", "href"), "https://www.youtube.com/upload")
             # a made clip plays in the dialog
-            pg.locator("#dn-list li").first.locator("button").nth(1).click()
+            pg.locator("#dn-list li").first.locator("button").nth(2).click()
             pg.wait_for_selector("#player[open]")
             pg.click("#player-close")
             pg.click("#dn-home")

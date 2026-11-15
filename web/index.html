@@ -31,6 +31,8 @@
 
 <div id="alert" class="alert" role="alert" hidden></div>
 
+<p id="update-bar" class="update-bar" hidden><span id="update-text"></span>
+  <a href="https://github.com/Surajprem7/clipfinder." target="_blank" rel="noopener noreferrer" data-i="update_link">GitHub-ൽ നിന്ന് എടുക്കുക</a></p>
 <main id="main">
 
   <!-- 1. HOME -->
@@ -224,15 +226,18 @@
 </dialog>
 
 <dialog id="ytdlg" aria-labelledby="ytdlg-title">
-  <div class="dlg-head"><h2 id="ytdlg-title" data-i="yt_dlg_title">YouTube-ലേക്ക് അപ്‌ലോഡ്</h2><button type="button" id="ytdlg-close" class="ghost small" data-i="close">അടയ്ക്കുക</button></div>
+  <div class="dlg-head"><h2 id="ytdlg-title" data-i="yt_dlg_title">ശീർഷകം, വിവരണം, അപ്‌ലോഡ്</h2><button type="button" id="ytdlg-close" class="ghost small" data-i="close">അടയ്ക്കുക</button></div>
   <div class="field"><label for="yt-title" class="big-s" data-i="title">ശീർഷകം</label>
     <input id="yt-title" type="text" class="text" maxlength="100" autocomplete="off"></div>
   <div class="field"><label for="yt-game" class="big-s" data-i="yt_game">ഗെയിമിന്റെ പേര്</label>
     <input id="yt-game" type="text" class="text" maxlength="60" autocomplete="off">
     <span class="muted small-t" data-i="yt_game_help">പേര് കൊടുത്താൽ വിവരണവും ഹാഷ്‌ടാഗുകളും അതനുസരിച്ച് നിറയും. വിവരണം നിങ്ങൾക്ക് മാറ്റാം.</span></div>
   <div class="field"><label for="yt-desc" class="big-s" data-i="yt_desc">വിവരണം</label>
-    <textarea id="yt-desc" class="text" rows="6" maxlength="4500"></textarea></div>
-  <div class="field"><label for="yt-privacy" class="big-s" data-i="yt_privacy">ആർക്ക് കാണാം</label>
+    <textarea id="yt-desc" class="text" rows="6" maxlength="4500"></textarea>
+    <div class="row wrap"><button type="button" id="yt-ai" class="ghost small" data-i="ai_write">AI കൊണ്ട് എഴുതിക്കുക</button>
+      <button type="button" id="yt-copy" class="ghost small" data-i="copy_desc">വിവരണം പകർത്തുക</button>
+      <span id="yt-ai-msg" class="muted small-t" role="status"></span></div></div>
+  <div class="field" id="yt-privacy-field"><label for="yt-privacy" class="big-s" data-i="yt_privacy">ആർക്ക് കാണാം</label>
     <select id="yt-privacy" class="text">
       <option value="private" data-i="yt_private">Private (ഞാൻ മാത്രം; Studio-ൽ നോക്കിയ ശേഷം പബ്ലിഷ് ചെയ്യാം)</option>
       <option value="unlisted" data-i="yt_unlisted">Unlisted (ലിങ്ക് ഉള്ളവർക്ക്)</option>
@@ -245,13 +250,27 @@
 <dialog id="settings" aria-labelledby="settings-title">
   <div class="dlg-head"><h2 id="settings-title" data-i="settings">ക്രമീകരണങ്ങൾ</h2><button type="button" id="settings-close" class="ghost small" data-i="close">അടയ്ക്കുക</button></div>
   <dl class="kv" id="kv"></dl>
-  <p class="muted small-t" data-i="privacy">ഒന്നും തനിയെ ഇന്റർനെറ്റിലേക്ക് അയയ്ക്കുന്നില്ല. YouTube ലിങ്ക് ഉപയോഗിക്കുമ്പോൾ yt-dlp ആ വീഡിയോ ഡൗൺലോഡ് ചെയ്യും; YouTube അപ്‌ലോഡ് സജ്ജമാക്കിയാൽ നിങ്ങൾ "അപ്‌ലോഡ്" അമർത്തുന്ന ക്ലിപ്പ് മാത്രം YouTube-ലേക്ക് പോകും.</p>
+  <p class="muted small-t" data-i="privacy">നിങ്ങളുടെ വീഡിയോകളോ വിവരങ്ങളോ തനിയെ എങ്ങും അയയ്ക്കുന്നില്ല. YouTube ലിങ്ക് ഉപയോഗിക്കുമ്പോൾ yt-dlp ആ വീഡിയോ ഡൗൺലോഡ് ചെയ്യും; YouTube അപ്‌ലോഡ് സജ്ജമാക്കിയാൽ നിങ്ങൾ "അപ്‌ലോഡ്" അമർത്തുന്ന ക്ലിപ്പ് മാത്രം YouTube-ലേക്ക് പോകും; ആപ്പ് തുറക്കുമ്പോൾ പുതിയ പതിപ്പ് ഉണ്ടോ എന്നറിയാൻ GitHub-ൽ നിന്ന് ഒരു ചെറിയ ഫയൽ വായിക്കും.</p>
   <div class="row wrap">
     <button type="button" id="st-folder" class="ghost local-only" data-i="open_video_folder">വീഡിയോ ഫോൾഡർ തുറക്കുക</button>
     <button type="button" id="st-update" class="ghost local-only" data-i="update_ytdlp">yt-dlp അപ്ഡേറ്റ് ചെയ്യുക</button>
     <button type="button" id="st-quit" class="ghost local-only" data-i="quit">ആപ്പ് അടയ്ക്കുക</button>
   </div>
   <p id="st-update-msg" class="muted small-t" role="status" hidden></p>
+  <details class="connect" id="aibox">
+    <summary data-i="ai_summary">AI സഹായി: ശീർഷകവും വിവരണവും എഴുതാൻ (ഓപ്ഷണൽ, ഈ PC-യിൽ മാത്രം)</summary>
+    <p class="small-t" data-i="ai_intro">ഈ PC-യിൽ തന്നെ ഓടുന്ന ഒരു AI മോഡൽ ക്ലിപ്പിലെ ചിത്രങ്ങൾ നോക്കി ശീർഷകം, വിവരണം, ഹാഷ്‌ടാഗുകൾ എന്നിവ നിർദ്ദേശിക്കും. ഒന്നും ഇന്റർനെറ്റിലേക്ക് പോകില്ല. ക്ലിപ്പ് കണ്ടെത്തൽ ഇപ്പോഴും AI ഇല്ലാതെ തന്നെ.</p>
+    <ol class="small-t">
+      <li><span data-i="ai_step1a">Ollama എന്ന സൗജന്യ പ്രോഗ്രാം ഇൻസ്റ്റാൾ ചെയ്യുക:</span> <code>ollama.com</code></li>
+      <li><span data-i="ai_step2a">ഒരു കറുത്ത ജാലകത്തിൽ (Command Prompt) ഇത് ഒരിക്കൽ ഓടിക്കുക, ചിത്രം കാണാൻ കഴിയുന്ന ഒരു മോഡൽ ഡൗൺലോഡ് ആകും (ഏകദേശം 3 GB):</span> <code>ollama pull gemma3:4b</code></li>
+      <li data-i="ai_step3">ഇവിടെ താഴെ ആ മോഡൽ തിരഞ്ഞെടുക്കുക.</li>
+    </ol>
+    <div class="row wrap"><label for="ai-model" class="small-t" data-i="ai_model">മോഡൽ</label>
+      <select id="ai-model" class="text ai-select"></select>
+      <button type="button" id="ai-refresh" class="ghost small" data-i="ai_refresh">വീണ്ടും നോക്കുക</button></div>
+    <p id="ai-status" class="small-t" role="status"></p>
+    <p class="muted small-t" data-i="ai_note">ചെറിയ മോഡലുകൾ തെറ്റുകൾ എഴുതാം, മലയാളം പ്രത്യേകിച്ച് മോശമാകാം. എഴുതിയത് വായിച്ച് തിരുത്തിയ ശേഷം മാത്രം ഉപയോഗിക്കുക. നല്ല ഗ്രാഫിക്സ് കാർഡ് ഇല്ലെങ്കിൽ ഒരു വിവരണത്തിന് ഒരു മിനിറ്റോ അതിലധികമോ എടുക്കാം.</p>
+  </details>
   <details class="connect" id="ytbox">
     <summary data-i="yt_summary">YouTube-ലേക്ക് നേരിട്ട് അപ്‌ലോഡ് (ഓപ്ഷണൽ)</summary>
     <p class="small-t" data-i="yt_intro">ബന്ധിപ്പിച്ചാൽ ഉണ്ടാക്കിയ Short ഒരു ബട്ടണിൽ നിങ്ങളുടെ ചാനലിലേക്ക് അപ്‌ലോഡ് ചെയ്യാം. നിങ്ങൾ "അപ്‌ലോഡ്" അമർത്തുന്ന ക്ലിപ്പ് മാത്രം YouTube-ലേക്ക് പോകും.</p>

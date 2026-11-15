@@ -3,7 +3,7 @@
 
 It is started by Claude itself (never by hand), talks over stdin/stdout, and opens no network port:
 
-    python clipfinder_web.py --mcp --data "D:\\Srj\\Video Automation"        (or:  ClipFinder.exe --mcp ...)
+    python clipfinder_web.py --mcp --data "D:\\Clipfinder\\data"        (or:  ClipFinder.exe --mcp ...)
 
 What Claude may do: list the videos in the ClipFinder videos folder, start an analysis (a video from that folder,
 or a YouTube link), watch / cancel the job, read the ranked clip list, make the chosen clips, and - only if you
@@ -75,6 +75,7 @@ FIXED_TEXT = {
     "bad_request": "The request has wrong values.",
     "no_space": "The disk is nearly full. Free some space first.",
     "bad_lang": "Unknown page language (only ml and en).",
+    "ai_no_model": "No AI model is chosen (the AI helper is used in the ClipFinder window, not here).",
     "yt_not_set_up": "YouTube upload is not set up (uploading is done in the ClipFinder window, not here).",
     "yt_not_connected": "YouTube is not connected (uploading is done in the ClipFinder window, not here).",
     "file_missing": "The video file is missing.",

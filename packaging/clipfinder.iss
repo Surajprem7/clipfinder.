@@ -50,8 +50,8 @@ begin
     False, '');
   DataPage.Add('');
   { not the Documents folder: OneDrive often syncs that, and videos are big }
-  if DirExists('D:\Srj\Clipfinder') then
-    DataPage.Values[0] := GetPreviousData('DataDir', 'D:\Srj\Clipfinder\data')
+  if DirExists('D:\Clipfinder') then
+    DataPage.Values[0] := GetPreviousData('DataDir', 'D:\Clipfinder\data')
   else
     DataPage.Values[0] := GetPreviousData('DataDir', ExpandConstant('{%USERPROFILE}') + '\ClipFinder');
 end;

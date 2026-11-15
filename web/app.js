@@ -78,6 +78,9 @@
         yt_quota: "YouTube-ന്റെ ഇന്നത്തെ അപ്‌ലോഡ് പരിധി കഴിഞ്ഞു. നാളെ ശ്രമിക്കുക.",
         yt_upload_failed: "അപ്‌ലോഡ് പരാജയപ്പെട്ടു. ഇന്റർനെറ്റ് നോക്കി വീണ്ടും ശ്രമിക്കുക (വിശദാംശം ടെർമിനലിൽ).",
         yt_bad_request: "ശീർഷകമോ വിവരണമോ ശരിയല്ല.",
+        ai_not_running: "Ollama ഓടുന്നില്ല. അത് തുറന്ന ശേഷം വീണ്ടും ശ്രമിക്കുക.",
+        ai_no_model: "AI മോഡൽ തിരഞ്ഞെടുത്തിട്ടില്ല (ക്രമീകരണങ്ങൾ → AI സഹായി).",
+        ai_failed: "AI-ക്ക് ഇത് എഴുതാൻ കഴിഞ്ഞില്ല. വീണ്ടും ശ്രമിക്കുക, അല്ലെങ്കിൽ മറ്റൊരു മോഡൽ നോക്കുക.",
       },
       err_other: "എന്തോ പിശക് സംഭവിച്ചു.",
       close: "അടയ്ക്കുക",
@@ -129,6 +132,17 @@
       copy_title_x: (t) => `${t}: ശീർഷകം പകർത്തുക`,
       title_copied: "പകർത്തി",
       link_fixed: "ബോക്സിൽ ഒന്നിലധികം ലിങ്ക് ഉണ്ടായിരുന്നു; അവസാനത്തേത് ഉപയോഗിച്ചു.",
+      update_text: (latest, cur) => `പുതിയ പതിപ്പ് v${latest} ഉണ്ട് (ഇപ്പോൾ v${cur}).`,
+      ai_off: "Ollama ഓടുന്നില്ല (അല്ലെങ്കിൽ ഇൻസ്റ്റാൾ ചെയ്തിട്ടില്ല).",
+      ai_none: "Ollama ഓടുന്നുണ്ട്, പക്ഷേ ഒരു മോഡലും ഇല്ല. മുകളിലെ രണ്ടാം ഘട്ടം ചെയ്യുക.",
+      ai_pick: "ഒരു മോഡൽ തിരഞ്ഞെടുക്കുക.",
+      ai_ready: (m) => `തയ്യാർ: ${m}. അവസാന സ്ക്രീനിലെ ക്ലിപ്പിന്റെ ബോക്സിൽ \"AI കൊണ്ട് എഴുതിക്കുക\" അമർത്താം.`,
+      ai_choose: "(തിരഞ്ഞെടുക്കുക)",
+      ai_working: "AI എഴുതുന്നു… (ഒരു മിനിറ്റോ അതിലധികമോ എടുക്കാം)",
+      ai_done: "AI എഴുതി. വായിച്ച് തിരുത്തുക.",
+      ai_setup: "AI സഹായി സജ്ജമാക്കിയിട്ടില്ല (ക്രമീകരണങ്ങൾ നോക്കുക).",
+      details_btn: "ശീർഷകവും വിവരണവും",
+      details_btn_x: (t) => `${t}: ശീർഷകവും വിവരണവും`,
       yt_ok: "ബന്ധിപ്പിച്ചിരിക്കുന്നു. അവസാന സ്ക്രീനിൽ ഓരോ ക്ലിപ്പിനും \"YouTube-ലേക്ക് അപ്‌ലോഡ്\" ബട്ടൺ കാണാം.",
       yt_need_file: "youtube_client.json ഫയൽ ഡാറ്റ ഫോൾഡറിൽ ഇതുവരെ ഇല്ല (മുകളിലെ ഘട്ടങ്ങൾ നോക്കുക).",
       yt_ready: "ഫയൽ കിട്ടി. ഇനി \"ബന്ധിപ്പിക്കുക\" അമർത്തുക.",
@@ -222,6 +236,9 @@
         yt_quota: "YouTube's upload limit for today is used up. Try tomorrow.",
         yt_upload_failed: "The upload failed. Check the internet and try again (details in the terminal).",
         yt_bad_request: "The title or description is not valid.",
+        ai_not_running: "Ollama is not running. Open it and try again.",
+        ai_no_model: "No AI model is chosen (Settings → AI helper).",
+        ai_failed: "The AI could not write this. Try again, or try another model.",
       },
       err_other: "Something went wrong.",
       close: "Close",
@@ -273,6 +290,17 @@
       copy_title_x: (t) => `${t}: copy title`,
       title_copied: "Copied",
       link_fixed: "The box had more than one link; the last one was used.",
+      update_text: (latest, cur) => `A newer version v${latest} is available (you have v${cur}).`,
+      ai_off: "Ollama is not running (or not installed).",
+      ai_none: "Ollama is running, but has no model. Do step 2 above.",
+      ai_pick: "Choose a model.",
+      ai_ready: (m) => `Ready: ${m}. In a clip's box on the last screen you can press \"Write with AI\".`,
+      ai_choose: "(choose)",
+      ai_working: "The AI is writing… (may take a minute or more)",
+      ai_done: "Written by the AI. Read it and correct it.",
+      ai_setup: "The AI helper is not set up (see Settings).",
+      details_btn: "Title and description",
+      details_btn_x: (t) => `${t}: title and description`,
       yt_ok: "Connected. On the last screen every clip has an \"Upload to YouTube\" button.",
       yt_need_file: "The youtube_client.json file is not in the data folder yet (see the steps above).",
       yt_ready: "File found. Now press \"Connect\".",
@@ -352,6 +380,17 @@
         rv_empty_text: 'Move the slider above towards "More clips", or choose "All".',
         sel_all: "Select all",
         sel_none: "Select none",
+        update_link: "Get it from GitHub",
+        ai_summary: "AI helper: writes titles and descriptions (optional, on this PC only)",
+        ai_intro: "An AI model running on this PC looks at pictures from the clip and suggests a title, a description and hashtags. Nothing goes to the internet. Finding clips still works without AI.",
+        ai_step1a: "Install the free program Ollama:",
+        ai_step2a: "In a black window (Command Prompt) run this once; it downloads a model that can see pictures (about 3 GB):",
+        ai_step3: "Choose that model here below.",
+        ai_model: "Model",
+        ai_refresh: "Check again",
+        ai_note: "Small models make mistakes, and their Malayalam can be poor. Read and correct the text before using it. Without a good graphics card one description can take a minute or more.",
+        ai_write: "Write with AI",
+        copy_desc: "Copy description",
         yt_summary: "Upload straight to YouTube (optional)",
         yt_intro: "Once connected, a finished Short can be uploaded to your channel with one button. Only the clip you press \"Upload\" on goes to YouTube.",
         yt_step1: "In Google Cloud Console, turn on \"YouTube Data API v3\" in a project.",
@@ -362,7 +401,7 @@
         yt_connect: "Connect",
         yt_disconnect: "Disconnect",
         yt_token_note: "When connected, a Google sign-in token is kept in the data folder on this PC. It can only upload videos. Do not share that folder with anyone.",
-        yt_dlg_title: "Upload to YouTube",
+        yt_dlg_title: "Title, description, upload",
         yt_game: "Name of the game",
         yt_game_help: "With a name, the description and hashtags are filled in to match. You can change the description.",
         yt_desc: "Description",
@@ -392,7 +431,7 @@
         upload_note: "Opens YouTube's upload box and the clips folder. Drag the clip from the folder into the box.",
         to_home: "Home",
         close: "Close",
-        privacy: "Nothing is sent to the internet on its own. A YouTube link makes yt-dlp download that video; and if you set up YouTube upload, only the clip you press Upload on is sent to YouTube.",
+        privacy: "None of your videos or data is sent anywhere on its own. A YouTube link makes yt-dlp download that video; if you set up YouTube upload, only the clip you press Upload on is sent to YouTube; and when the app opens it reads one small file from GitHub to see whether a newer version exists.",
         open_video_folder: "Open video folder",
         update_ytdlp: "Update yt-dlp",
         quit: "Close the app",
@@ -484,6 +523,7 @@
     lastLayout: "blur", // the layout chosen last; new clips start with it
     uploaded: {},       // clip file name -> { video, privacy } after a YouTube upload
     game: "",           // game name typed last in the upload box
+    update: null,       // answer of /api/update
   };
 
   // ------------------------------------------------------------------ errors
@@ -1014,7 +1054,7 @@
                    target: "_blank", rel: "noopener noreferrer" }, tr("yt_done", up.privacy) + " · " + tr("yt_studio"))
         : (state.app && state.app.youtube.connected
           ? h("button", { type: "button", class: "ghost", "aria-label": tr("yt_btn_x", title), onclick: () => openUpload(id, f.file, title) }, tr("yt_btn"))
-          : null);
+          : h("button", { type: "button", class: "ghost", "aria-label": tr("details_btn_x", title), onclick: () => openUpload(id, f.file, title) }, tr("details_btn")));
       return h("li", { class: "item" }, h("div", { class: "t" }, h("b", null, title), h("span", null, meta)),
         h("div", { class: "row wrap" }, yt, copy,
           h("button", { type: "button", class: "ghost", "aria-label": tr("watch_x", title), onclick: () => openPlayer(id, f.file, title) }, tr("watch"))));
@@ -1168,6 +1208,26 @@
     ytAuto = ""; $("yt-desc").value = ""; refill();
     $("yt-privacy").value = "private";
     $("yt-msg").textContent = "";
+    $("yt-ai-msg").textContent = "";
+    const linked = !!(state.app && state.app.youtube.connected);
+    $("yt-go").hidden = !linked;
+    $("yt-privacy-field").hidden = !linked;
+    $("yt-copy").onclick = async () => {
+      try { await navigator.clipboard.writeText($("yt-desc").value); $("yt-ai-msg").textContent = tr("copied"); }
+      catch (e) { $("yt-desc").select(); $("yt-ai-msg").textContent = tr("copy_manual"); }
+    };
+    $("yt-ai").onclick = async () => {
+      $("yt-ai").disabled = true;
+      $("yt-ai-msg").textContent = tr("ai_working");
+      try {
+        const r = await api("POST", "/api/ai/describe", { id, file, game: $("yt-game").value.trim(), title: $("yt-title").value.trim().slice(0, 100), lang });
+        $("yt-title").value = r.title;
+        $("yt-desc").value = r.description;
+        ytAuto = "";                                         // from here on the text is not refilled by the template
+        $("yt-ai-msg").textContent = tr("ai_done");
+      } catch (e) { $("yt-ai-msg").textContent = ERR[e && e.code] || tr("err_other"); }
+      $("yt-ai").disabled = false;
+    };
     $("yt-go").onclick = async () => {
       const t = $("yt-title").value.trim();
       if (!t) { $("yt-msg").textContent = tr("yt_need_title"); return $("yt-title").focus(); }
@@ -1183,6 +1243,33 @@
   $("yt-title").addEventListener("input", refill);
   $("yt-game").addEventListener("input", refill);
   $("ytdlg-close").addEventListener("click", () => $("ytdlg").close());
+
+  // ------------------------------------------------------------------ AI helper (Ollama on this PC)
+  async function showAi() {
+    let info;
+    try { info = await api("GET", "/api/ai"); } catch (e) { info = { running: false, models: [], model: "" }; }
+    const sel = $("ai-model");
+    sel.replaceChildren(h("option", { value: "" }, tr("ai_choose")), ...info.models.map((m) => h("option", { value: m }, m)));
+    sel.value = info.model;
+    sel.disabled = !info.models.length || document.body.classList.contains("remote");
+    $("ai-status").textContent = !info.running ? tr("ai_off") : !info.models.length ? tr("ai_none") : !info.model ? tr("ai_pick") : tr("ai_ready", info.model);
+  }
+  $("ai-model").addEventListener("change", async () => {
+    try { await api("POST", "/api/ai/model", { model: $("ai-model").value }); } catch (e) { $("ai-status").textContent = ERR[e && e.code] || tr("err_other"); return; }
+    showAi();
+  });
+  $("ai-refresh").addEventListener("click", showAi);
+  $("aibox").addEventListener("toggle", () => { if ($("aibox").open) showAi(); });
+
+  // ------------------------------------------------------------------ newer version?
+  async function checkUpdate() {
+    try {
+      const u = await api("GET", "/api/update");
+      state.update = u;
+      $("update-bar").hidden = !u.newer;
+      if (u.newer) $("update-text").textContent = tr("update_text", u.latest, u.current);
+    } catch (e) { /* no note */ }
+  }
 
   let ytPoll = 0;
   function showYouTube() {
@@ -1223,6 +1310,8 @@
     try { await api("POST", "/api/lang", { lang: l }); } catch (e) { /* not saved: still switched for now */ }
     if (state.app) state.app.lang = l;
     if ($("settings").open && state.app) fillSettings();
+    if ($("aibox").open) showAi();
+    if (state.update && state.update.newer) $("update-text").textContent = tr("update_text", state.update.latest, state.update.current);
     if (connectorInfo) showConnector();
     pausePreview();
     if (state.watching && state.progress) drawProgress(...state.progress);
@@ -1233,4 +1322,5 @@
   // ------------------------------------------------------------------ start
   applyPageText();
   route();
+  checkUpdate();
 })();

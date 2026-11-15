@@ -16,7 +16,8 @@ Safety measures (each one is covered by a test in tests/test_web.py):
     real video files); files are served only from fixed places (the page's own 3 files, the chosen video,
     the clips folder), never from a path the page supplies
   * ffmpeg / yt-dlp are started with argument lists, never through a shell
-  * this file never opens network connections itself; uploading to YouTube (only when the user set it up and
+  * this file never opens network connections itself; the AI helper (Ollama on this computer only) is in
+    clipfinder_ai.py and the "newer version?" check in clipfinder_update.py; uploading to YouTube (only when the user set it up and
     presses Upload) is done by clipfinder_youtube.py, and Google's sign-in comes back to /oauth/callback, which
     acts only on a one-time value this program created
 """
@@ -44,6 +45,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, unquote, urlsplit
 
 import clipfinder as cf
+import clipfinder_ai as ai
+import clipfinder_update as upd
 import clipfinder_youtube as yt
 
 VIDEO_EXT = {".mp4", ".mkv", ".mov", ".webm", ".m4v", ".ts", ".avi", ".flv"}
@@ -480,6 +483,7 @@ def save_remote_host(root: str, host: str | None) -> None:
 
 
 LANGS = ("ml", "en")
+AI_CODES = {"not_running": "ai_not_running", "no_model": "ai_no_model", "failed": "ai_failed"}
 # what clipfinder_youtube reports -> the code the page gets (the page has a sentence for each, in both languages)
 YT_CODES = {"not_set_up": "yt_not_set_up", "not_connected": "yt_not_connected", "reconnect": "yt_reconnect",
             "auth_failed": "yt_auth_failed", "quota": "yt_quota", "upload_failed": "yt_upload_failed",
@@ -495,20 +499,34 @@ OAUTH_FAIL_PAGE = """<!doctype html><html lang="ml"><meta charset="utf-8"><title
 <h2 lang="en">Could not connect YouTube</h2><p lang="en">Open Settings in clipfinder and press "Connect" again.</p></body></html>"""
 
 
-def load_lang(root: str) -> str:
-    """The page language the user chose (saved in prefs.json in the data folder). Malayalam until changed."""
+def load_prefs(root: str) -> dict:
+    """What the user chose, kept in prefs.json in the data folder: page language and the AI model."""
     try:
         with open(os.path.join(root, "prefs.json"), encoding="utf-8") as fh:
-            lang = json.load(fh).get("lang")
-        return lang if lang in LANGS else "ml"
-    except (OSError, ValueError, AttributeError):
-        return "ml"
+            raw = json.load(fh)
+    except (OSError, ValueError, RecursionError):
+        raw = {}
+    raw = raw if isinstance(raw, dict) else {}
+    lang, model = raw.get("lang"), raw.get("ai_model")
+    return {"lang": lang if lang in LANGS else "ml",
+            "ai_model": model if isinstance(model, str) and ai.MODEL_RE.fullmatch(model) else ""}
+
+
+def save_pref(root: str, key: str, value) -> None:
+    prefs = load_prefs(root)
+    prefs[key] = value
+    cf.atomic_write(os.path.join(root, "prefs.json"), "w", lambda fh: json.dump(prefs, fh), encoding="utf-8")
+
+
+def load_lang(root: str) -> str:
+    """The page language the user chose. Malayalam until changed."""
+    return load_prefs(root)["lang"]
 
 
 def save_lang(root: str, lang) -> str:
     if lang not in LANGS:
         raise ApiError(400, "bad_lang")
-    cf.atomic_write(os.path.join(root, "prefs.json"), "w", lambda fh: json.dump({"lang": lang}, fh), encoding="utf-8")
+    save_pref(root, "lang", lang)
     return lang
 
 
@@ -546,6 +564,8 @@ class App:
         self.locks = {}
         self.remote_host = None                                   # set by make_server when remote access is on
         self.youtube = yt.YouTube(store.root)
+        self.update_check = False                                 # main() turns it on; tests never ask GitHub
+        self.ai_lock = threading.Lock()                           # the AI helper writes one description at a time
 
     # ---- views
     def tools(self) -> dict:
@@ -796,6 +816,65 @@ class App:
             return {"analysis": aid, "files": files}
 
         return {"job": self.jobs.start("render", aid, work)["id"]}
+
+    # ---- newer version? (clipfinder_update.py asks GitHub for one small public file)
+    def update_info(self) -> dict:
+        if not self.update_check:
+            return {"current": cf.__version__, "latest": None, "newer": False}
+        return upd.check(cf.__version__)
+
+    # ---- AI helper on this computer (clipfinder_ai.py talks to Ollama on 127.0.0.1 only)
+    def ai_info(self) -> dict:
+        st = ai.status()
+        saved = load_prefs(self.store.root)["ai_model"]
+        return {**st, "model": saved if saved in st["models"] else ""}
+
+    def ai_set_model(self, model) -> dict:
+        if model != "" and (not isinstance(model, str) or not ai.MODEL_RE.fullmatch(model) or model not in ai.status()["models"]):
+            raise ApiError(400, "ai_no_model")
+        save_pref(self.store.root, "ai_model", model)
+        return self.ai_info()
+
+    def clip_sheet(self, aid: str, name) -> bytes:
+        """Four small frames of a finished clip side by side, as one JPEG, for the AI helper to look at."""
+        self.store.read_meta(aid)
+        if not isinstance(name, str) or not re.fullmatch(r"[^/\\\x00]{1,200}\.mp4", name) or name.startswith("."):
+            raise ApiError(400, "bad_request")
+        folder = os.path.realpath(self.store.clips_dir(aid))
+        target = os.path.realpath(os.path.join(folder, name))
+        if os.path.dirname(target) != folder or not os.path.isfile(target):
+            raise ApiError(404, "not_found")
+        try:
+            dur = float(cf.probe(target)["duration"])
+        except (SystemExit, KeyError, TypeError, ValueError):
+            raise ApiError(400, "unreadable") from None
+        cmd = [cf.tool("ffmpeg"), "-nostdin", "-v", "error", *cf.FF_IN, "-i", target,
+               "-vf", f"fps=4/{max(dur, 1.0):.2f},scale=288:512,tile=4x1", "-frames:v", "1", "-f", "mjpeg", "-q:v", "4", "-"]
+        try:
+            with self.thumb_slots:
+                jpg = subprocess.run(cmd, capture_output=True, stdin=subprocess.DEVNULL, timeout=60).stdout
+        except (OSError, subprocess.TimeoutExpired):
+            jpg = b""
+        if not jpg.startswith(b"\xff\xd8") or len(jpg) > 1_500_000:
+            raise ApiError(400, "unreadable")
+        return jpg
+
+    def ai_describe(self, body: dict) -> dict:
+        game, hint, lang = body.get("game", ""), body.get("title", ""), body.get("lang", "en")
+        if not isinstance(game, str) or len(game) > 60 or not isinstance(hint, str) or len(hint) > 100 or lang not in LANGS:
+            raise ApiError(400, "bad_request")
+        sheet = self.clip_sheet(body.get("id"), body.get("file"))
+        model = self.ai_info()["model"]
+        if not model:
+            raise ApiError(400, "ai_no_model")
+        if not self.ai_lock.acquire(blocking=False):
+            raise ApiError(409, "busy")
+        try:
+            return ai.describe(model, sheet, game, hint, lang)
+        except ai.AiError as exc:
+            raise ApiError(400, AI_CODES.get(exc.code, "ai_failed")) from None
+        finally:
+            self.ai_lock.release()
 
     # ---- YouTube upload (all talking to Google is in clipfinder_youtube.py)
     @staticmethod
@@ -1134,6 +1213,10 @@ class Handler(BaseHTTPRequestHandler):
                 st = app.state()
                 st["remote"] = self._is_remote()
                 return self._json(st)
+            if path == "/api/update":
+                return self._json(app.update_info())
+            if path == "/api/ai":
+                return self._json(app.ai_info())
             if path == "/api/remote":
                 self._local_only()
                 return self._json(app.remote_info())
@@ -1169,7 +1252,7 @@ class Handler(BaseHTTPRequestHandler):
 
         if method == "POST":
             if path in ("/api/pick", "/api/update-ytdlp", "/api/open-folder", "/api/quit", "/api/connector-test",
-                        "/api/remote", "/api/youtube/connect", "/api/youtube/disconnect"):
+                        "/api/remote", "/api/youtube/connect", "/api/youtube/disconnect", "/api/ai/model"):
                 self._local_only()
             if path == "/api/pick":
                 self._read_json()
@@ -1192,6 +1275,10 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(app.test_connector())
             if path == "/api/remote":
                 return self._json(app.set_remote(body.get("host")))
+            if path == "/api/ai/model":
+                return self._json(app.ai_set_model(body.get("model")))
+            if path == "/api/ai/describe":
+                return self._json(app.ai_describe(body))
             if path == "/api/youtube/connect":
                 return self._json(app.youtube_connect())
             if path == "/api/youtube/disconnect":
@@ -1354,6 +1441,7 @@ def main(argv=None) -> int:
     ap.add_argument("--no-browser", action="store_true", help="do not open the browser automatically")
     ap.add_argument("--tab", action="store_true", help="open in a normal browser tab instead of a small app window")
     ap.add_argument("--verbose", action="store_true")
+    ap.add_argument("--no-update-check", action="store_true", help="never ask GitHub whether a newer version exists")
     ap.add_argument("--remote-host", help="your Tailscale name (like pc.tail1234.ts.net) to allow opening the page from your other devices")
     ap.add_argument("--mcp", action="store_true", help="run as the Claude connector (started by Claude, not by hand)")
     ap.add_argument("--images", action="store_true", help="with --mcp: let Claude see one still picture per clip")
@@ -1383,6 +1471,7 @@ def main(argv=None) -> int:
         print("ERROR: --remote-host must be a Tailscale name ending in .ts.net", file=sys.stderr)
         return 2
     srv, app = make_server(store, args.port, verbose=args.verbose, remote_host=remote)
+    app.update_check = not args.no_update_check
     url = f"http://127.0.0.1:{app.port}/?t={app.token}"
     print("clipfinder is running on your computer only.", flush=True)
     print(f"Open this link in your browser (it opens by itself in a moment):\n\n    {url}\n", flush=True)
