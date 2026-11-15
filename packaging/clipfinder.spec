@@ -24,7 +24,7 @@ a = Analysis(
     pathex=[root],
     binaries=vc_runtime,
     datas=[(os.path.join(root, "web"), "web")],
-    hiddenimports=["clipfinder", "clipfinder_mcp"],
+    hiddenimports=["clipfinder", "clipfinder_mcp", "clipfinder_youtube"],
     excludes=["pytest", "IPython", "matplotlib", "scipy", "pandas", "PIL"],
     noarchive=False,
 )

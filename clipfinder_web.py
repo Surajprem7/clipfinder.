@@ -16,6 +16,9 @@ Safety measures (each one is covered by a test in tests/test_web.py):
     real video files); files are served only from fixed places (the page's own 3 files, the chosen video,
     the clips folder), never from a path the page supplies
   * ffmpeg / yt-dlp are started with argument lists, never through a shell
+  * this file never opens network connections itself; uploading to YouTube (only when the user set it up and
+    presses Upload) is done by clipfinder_youtube.py, and Google's sign-in comes back to /oauth/callback, which
+    acts only on a one-time value this program created
 """
 from __future__ import annotations
 
@@ -41,6 +44,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, unquote, urlsplit
 
 import clipfinder as cf
+import clipfinder_youtube as yt
 
 VIDEO_EXT = {".mp4", ".mkv", ".mov", ".webm", ".m4v", ".ts", ".avi", ".flv"}
 MIME = {".mp4": "video/mp4", ".m4v": "video/mp4", ".webm": "video/webm", ".mkv": "video/x-matroska",
@@ -476,6 +480,19 @@ def save_remote_host(root: str, host: str | None) -> None:
 
 
 LANGS = ("ml", "en")
+# what clipfinder_youtube reports -> the code the page gets (the page has a sentence for each, in both languages)
+YT_CODES = {"not_set_up": "yt_not_set_up", "not_connected": "yt_not_connected", "reconnect": "yt_reconnect",
+            "auth_failed": "yt_auth_failed", "quota": "yt_quota", "upload_failed": "yt_upload_failed",
+            "bad_request": "yt_bad_request"}
+
+OAUTH_OK_PAGE = """<!doctype html><html lang="ml"><meta charset="utf-8"><title>clipfinder</title>
+<body>
+<h2>YouTube ബന്ധിപ്പിച്ചു</h2><p>ഈ ടാബ് അടച്ച് clipfinder-ലേക്ക് തിരികെ പോകാം.</p>
+<h2 lang="en">YouTube is connected</h2><p lang="en">You can close this tab and go back to clipfinder.</p></body></html>"""
+OAUTH_FAIL_PAGE = """<!doctype html><html lang="ml"><meta charset="utf-8"><title>clipfinder</title>
+<body>
+<h2>YouTube ബന്ധിപ്പിക്കാൻ കഴിഞ്ഞില്ല</h2><p>clipfinder-ൽ ക്രമീകരണങ്ങൾ തുറന്ന് വീണ്ടും "ബന്ധിപ്പിക്കുക" അമർത്തുക.</p>
+<h2 lang="en">Could not connect YouTube</h2><p lang="en">Open Settings in clipfinder and press "Connect" again.</p></body></html>"""
 
 
 def load_lang(root: str) -> str:
@@ -528,6 +545,7 @@ class App:
         self.server = None
         self.locks = {}
         self.remote_host = None                                   # set by make_server when remote access is on
+        self.youtube = yt.YouTube(store.root)
 
     # ---- views
     def tools(self) -> dict:
@@ -633,7 +651,8 @@ class App:
         return {"version": cf.__version__, "data_dir": self.store.root, "video_dir": self.store.videos,
                 "tools": self.tools(), "presets": PRESET_IDS, "videos": self.list_videos(),
                 "library": self.library(), "job": self.jobs.view(),
-                "detectors": {k: v[0] for k, v in cf.DETECTORS.items()}, "lang": load_lang(self.store.root)}
+                "detectors": {k: v[0] for k, v in cf.DETECTORS.items()}, "lang": load_lang(self.store.root),
+                "youtube": self.youtube.status()}
 
     def describe(self, aid: str) -> dict:
         meta = self.store.read_meta(aid)
@@ -777,6 +796,59 @@ class App:
             return {"analysis": aid, "files": files}
 
         return {"job": self.jobs.start("render", aid, work)["id"]}
+
+    # ---- YouTube upload (all talking to Google is in clipfinder_youtube.py)
+    @staticmethod
+    def _yt(fn, *args, **kw):
+        try:
+            return fn(*args, **kw)
+        except yt.YouTubeError as exc:
+            if exc.code == "cancelled":
+                raise cf.Cancelled() from None
+            raise ApiError(400, YT_CODES.get(exc.code, "yt_upload_failed")) from None
+
+    def youtube_connect(self) -> dict:
+        return {"url": self._yt(self.youtube.begin, self.port)}
+
+    def youtube_callback(self, query: dict) -> bool:
+        """Google sent the browser back after the sign-in. True when the sign-in worked."""
+        state = (query.get("state") or [None])[0]
+        code = (query.get("code") or [None])[0]
+        try:
+            self.youtube.finish(state, code)
+            return True
+        except yt.YouTubeError:
+            return False
+
+    def youtube_disconnect(self) -> dict:
+        self.youtube.disconnect()
+        return self.youtube.status()
+
+    def start_upload(self, body: dict) -> dict:
+        aid, name = body.get("id"), body.get("file")
+        self.store.read_meta(aid)
+        title, desc, privacy = body.get("title"), body.get("description", ""), body.get("privacy", "private")
+        if (not isinstance(name, str) or not re.fullmatch(r"[^/\\\x00]{1,200}\.mp4", name) or name.startswith(".")
+                or not isinstance(title, str) or not title.strip() or len(title) > 100
+                or not isinstance(desc, str) or len(desc) > 4500 or privacy not in yt.PRIVACY):
+            raise ApiError(400, "bad_request")
+        folder = os.path.realpath(self.store.clips_dir(aid))
+        target = os.path.realpath(os.path.join(folder, name))
+        if os.path.dirname(target) != folder or not os.path.isfile(target):
+            raise ApiError(404, "not_found")
+        st = self.youtube.status()
+        if not st["client"]:
+            raise ApiError(400, "yt_not_set_up")
+        if not st["connected"]:
+            raise ApiError(400, "yt_not_connected")
+
+        def work(progress):
+            progress("upload", 0.0)
+            vid = self._yt(self.youtube.upload, target, title, desc, privacy,
+                           progress=lambda f: progress("upload", f), cancelled=cf.CANCEL.is_set)
+            return {"analysis": aid, "file": name, "video": vid, "privacy": privacy}
+
+        return {"job": self.jobs.start("upload", aid, work)["id"]}
 
     def section_fetcher(self, aid: str, meta: dict, data: dict, progress):
         """For a clip from a link: download only that part of the video in full quality (a few seconds of padding
@@ -942,7 +1014,8 @@ class Handler(BaseHTTPRequestHandler):
             self._fail(400, "no_chunked")
             return False
         site = self.headers.get("Sec-Fetch-Site")
-        if site is not None and site not in ("same-origin", "none"):
+        from_google = self.command == "GET" and urlsplit(self.path).path == "/oauth/callback"   # see _dispatch
+        if site is not None and site not in ("same-origin", "none") and not from_google:
             self._fail(403, "cross_site")
             return False
         return True
@@ -998,6 +1071,15 @@ class Handler(BaseHTTPRequestHandler):
             if len(url.query) > 2000:
                 raise ApiError(414, "uri_too_long")
             path, query = url.path, (parse_qs(url.query, max_num_fields=10) if url.query else {})
+            if method == "GET" and path == "/oauth/callback":
+                # The browser arrives here from Google's sign-in page, so it carries no session cookie (SameSite) and
+                # counts as cross-site. It is accepted only on this computer, and only does something when it brings
+                # the one-time 'state' value that this program made for the sign-in it started itself.
+                if self._is_remote():
+                    return self._fail(403, "local_only")
+                ok = self.app.youtube_callback(query)
+                return self._send(200 if ok else 400, (OAUTH_OK_PAGE if ok else OAUTH_FAIL_PAGE).encode("utf-8"),
+                                  "text/html; charset=utf-8", html=True)
             if method == "GET" and path == "/" and "t" in query:
                 tok = query["t"][0]
                 if hmac.compare_digest(tok.encode(), self.app.token.encode()):
@@ -1087,7 +1169,7 @@ class Handler(BaseHTTPRequestHandler):
 
         if method == "POST":
             if path in ("/api/pick", "/api/update-ytdlp", "/api/open-folder", "/api/quit", "/api/connector-test",
-                        "/api/remote"):
+                        "/api/remote", "/api/youtube/connect", "/api/youtube/disconnect"):
                 self._local_only()
             if path == "/api/pick":
                 self._read_json()
@@ -1110,6 +1192,12 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(app.test_connector())
             if path == "/api/remote":
                 return self._json(app.set_remote(body.get("host")))
+            if path == "/api/youtube/connect":
+                return self._json(app.youtube_connect())
+            if path == "/api/youtube/disconnect":
+                return self._json(app.youtube_disconnect())
+            if path == "/api/youtube/upload":
+                return self._json(app.start_upload(body))
             if path == "/api/lang":
                 return self._json({"lang": save_lang(app.store.root, body.get("lang"))})
             if path == "/api/cancel":

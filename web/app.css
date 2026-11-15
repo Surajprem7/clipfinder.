@@ -212,3 +212,11 @@ textarea.code{width:100%;box-sizing:border-box;font:13px/1.45 ui-monospace,Conso
 .remote .local-only{display:none !important}
 input.wide{flex:1 1 280px;min-width:0;box-sizing:border-box;font:inherit;background:var(--bg);color:var(--text);border:1px solid var(--line2);border-radius:8px;padding:9px 10px}
 .connect ol{padding-left:22px;margin:8px 0}
+
+textarea.text{height:auto;min-height:120px;resize:vertical;font:inherit;line-height:1.5;padding:12px 14px}
+select.text{appearance:auto}
+#ytdlg{max-width:560px;width:calc(100% - 32px)}
+#ytdlg .field{margin-top:14px}
+#ytdlg .between{margin-top:18px}
+.item .row.wrap{justify-content:flex-end}
+.done-link{color:var(--text);font-size:14px}

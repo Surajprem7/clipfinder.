@@ -32,3 +32,5 @@ __pycache__/
 *.pyc
 .venv/
 venv/
+youtube_client.json
+.youtube-token

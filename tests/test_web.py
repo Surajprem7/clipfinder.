@@ -1216,7 +1216,7 @@ class TestStaticRules(unittest.TestCase):
     """Rules about the code and page files themselves."""
     ALLOWED = {"argparse", "errno", "hashlib", "hmac", "http", "importlib", "json", "math", "os", "re", "secrets", "shutil",
                "subprocess", "sys", "threading", "time", "traceback", "webbrowser", "urllib", "clipfinder", "__future__",
-               "tkinter", "clipfinder_mcp", "fcntl", "msvcrt"}                # tkinter: only the file dialog, in its own process
+               "tkinter", "clipfinder_mcp", "clipfinder_youtube", "fcntl", "msvcrt"}                # tkinter: only the file dialog, in its own process
     FORBIDDEN_CALLS = {"eval", "exec", "compile", "__import__"}
 
     def tree(self):
@@ -1264,7 +1264,8 @@ class TestStaticRules(unittest.TestCase):
         # innerHTML is never used (server text goes in with textContent only)
         self.assertNotIn("innerHTML", js)
         outside = {u for u in re.findall(r"https?://[^\s\"'`)]+", js)
-                   if not u.startswith(("http://www.w3.org/2000/svg", "https://www.youtube.com", "https://youtu.be"))}
+                   if not u.startswith(("http://www.w3.org/2000/svg", "https://www.youtube.com", "https://youtu.be",
+                                        "https://studio.youtube.com/video/", "https://accounts.google.com/"))}
         self.assertEqual(outside, set())
         self.assertEqual(sorted(set(re.findall(r"https?://[^\s\"'<>]+", html_))),
                          ["http://www.w3.org/2000/svg", "https://www.youtube.com/upload", "https://www.youtube.com/watch?v=…"])

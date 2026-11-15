@@ -75,6 +75,8 @@ FIXED_TEXT = {
     "bad_request": "The request has wrong values.",
     "no_space": "The disk is nearly full. Free some space first.",
     "bad_lang": "Unknown page language (only ml and en).",
+    "yt_not_set_up": "YouTube upload is not set up (uploading is done in the ClipFinder window, not here).",
+    "yt_not_connected": "YouTube is not connected (uploading is done in the ClipFinder window, not here).",
     "file_missing": "The video file is missing.",
     "bad_type": "That file type is not supported.",
     "internal": "An unexpected error happened inside ClipFinder.",

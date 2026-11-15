@@ -207,7 +207,7 @@
       <ul id="dn-list" class="list"></ul>
       <div class="row wrap">
         <button type="button" id="dn-folder" class="primary local-only" data-i="open_folder">ഫോൾഡർ തുറക്കുക</button>
-        <a id="dn-studio" class="btn ghost" href="https://www.youtube.com/upload" target="_blank" rel="noopener noreferrer" data-i="open_studio">YouTube-ൽ അപ്‌ലോഡ് ചെയ്യുക</a>
+        <a id="dn-studio" class="btn ghost" href="https://www.youtube.com/upload" target="_blank" rel="noopener noreferrer" data-i="open_studio">YouTube അപ്‌ലോഡ് പേജ് തുറക്കുക</a>
       </div>
       <p id="dn-path" class="muted small-t" hidden></p>
       <div class="between foot">
@@ -223,16 +223,51 @@
   <video id="player-video" controls playsinline></video>
 </dialog>
 
+<dialog id="ytdlg" aria-labelledby="ytdlg-title">
+  <div class="dlg-head"><h2 id="ytdlg-title" data-i="yt_dlg_title">YouTube-ലേക്ക് അപ്‌ലോഡ്</h2><button type="button" id="ytdlg-close" class="ghost small" data-i="close">അടയ്ക്കുക</button></div>
+  <div class="field"><label for="yt-title" class="big-s" data-i="title">ശീർഷകം</label>
+    <input id="yt-title" type="text" class="text" maxlength="100" autocomplete="off"></div>
+  <div class="field"><label for="yt-game" class="big-s" data-i="yt_game">ഗെയിമിന്റെ പേര്</label>
+    <input id="yt-game" type="text" class="text" maxlength="60" autocomplete="off">
+    <span class="muted small-t" data-i="yt_game_help">പേര് കൊടുത്താൽ വിവരണവും ഹാഷ്‌ടാഗുകളും അതനുസരിച്ച് നിറയും. വിവരണം നിങ്ങൾക്ക് മാറ്റാം.</span></div>
+  <div class="field"><label for="yt-desc" class="big-s" data-i="yt_desc">വിവരണം</label>
+    <textarea id="yt-desc" class="text" rows="6" maxlength="4500"></textarea></div>
+  <div class="field"><label for="yt-privacy" class="big-s" data-i="yt_privacy">ആർക്ക് കാണാം</label>
+    <select id="yt-privacy" class="text">
+      <option value="private" data-i="yt_private">Private (ഞാൻ മാത്രം; Studio-ൽ നോക്കിയ ശേഷം പബ്ലിഷ് ചെയ്യാം)</option>
+      <option value="unlisted" data-i="yt_unlisted">Unlisted (ലിങ്ക് ഉള്ളവർക്ക്)</option>
+      <option value="public" data-i="yt_public">Public (എല്ലാവർക്കും, ഉടൻ)</option>
+    </select></div>
+  <div class="between"><span id="yt-msg" class="muted small-t" role="status"></span>
+    <button type="button" id="yt-go" class="primary" data-i="yt_upload">അപ്‌ലോഡ് ചെയ്യുക</button></div>
+</dialog>
+
 <dialog id="settings" aria-labelledby="settings-title">
   <div class="dlg-head"><h2 id="settings-title" data-i="settings">ക്രമീകരണങ്ങൾ</h2><button type="button" id="settings-close" class="ghost small" data-i="close">അടയ്ക്കുക</button></div>
   <dl class="kv" id="kv"></dl>
-  <p class="muted small-t" data-i="privacy">ഒന്നും ഇന്റർനെറ്റിലേക്ക് അയയ്ക്കുന്നില്ല. YouTube ലിങ്ക് ഉപയോഗിക്കുമ്പോൾ മാത്രം yt-dlp ആ വീഡിയോ ഡൗൺലോഡ് ചെയ്യാൻ ഇന്റർനെറ്റ് ഉപയോഗിക്കും.</p>
+  <p class="muted small-t" data-i="privacy">ഒന്നും തനിയെ ഇന്റർനെറ്റിലേക്ക് അയയ്ക്കുന്നില്ല. YouTube ലിങ്ക് ഉപയോഗിക്കുമ്പോൾ yt-dlp ആ വീഡിയോ ഡൗൺലോഡ് ചെയ്യും; YouTube അപ്‌ലോഡ് സജ്ജമാക്കിയാൽ നിങ്ങൾ "അപ്‌ലോഡ്" അമർത്തുന്ന ക്ലിപ്പ് മാത്രം YouTube-ലേക്ക് പോകും.</p>
   <div class="row wrap">
     <button type="button" id="st-folder" class="ghost local-only" data-i="open_video_folder">വീഡിയോ ഫോൾഡർ തുറക്കുക</button>
     <button type="button" id="st-update" class="ghost local-only" data-i="update_ytdlp">yt-dlp അപ്ഡേറ്റ് ചെയ്യുക</button>
     <button type="button" id="st-quit" class="ghost local-only" data-i="quit">ആപ്പ് അടയ്ക്കുക</button>
   </div>
   <p id="st-update-msg" class="muted small-t" role="status" hidden></p>
+  <details class="connect" id="ytbox">
+    <summary data-i="yt_summary">YouTube-ലേക്ക് നേരിട്ട് അപ്‌ലോഡ് (ഓപ്ഷണൽ)</summary>
+    <p class="small-t" data-i="yt_intro">ബന്ധിപ്പിച്ചാൽ ഉണ്ടാക്കിയ Short ഒരു ബട്ടണിൽ നിങ്ങളുടെ ചാനലിലേക്ക് അപ്‌ലോഡ് ചെയ്യാം. നിങ്ങൾ "അപ്‌ലോഡ്" അമർത്തുന്ന ക്ലിപ്പ് മാത്രം YouTube-ലേക്ക് പോകും.</p>
+    <ol class="small-t">
+      <li data-i="yt_step1">Google Cloud Console-ൽ ഒരു പ്രോജക്റ്റിൽ "YouTube Data API v3" ഓൺ ചെയ്യുക.</li>
+      <li data-i="yt_step2">OAuth consent screen സജ്ജമാക്കി, നിങ്ങളുടെ Google അക്കൗണ്ട് "Test users"-ൽ ചേർക്കുക.</li>
+      <li data-i="yt_step3">Credentials → Create credentials → OAuth client ID → "Desktop app". JSON ഫയൽ ഡൗൺലോഡ് ചെയ്യുക.</li>
+      <li><span data-i="yt_step4a">ആ ഫയലിന്റെ പേര്</span> <code>youtube_client.json</code> <span data-i="yt_step4b">എന്നാക്കി "എല്ലാ ഫയലുകളും" ഫോൾഡറിൽ (മുകളിൽ കാണാം) വയ്ക്കുക. എന്നിട്ട് ഇവിടെ "ബന്ധിപ്പിക്കുക" അമർത്തുക.</span></li>
+    </ol>
+    <p id="yt-status" class="small-t" role="status"></p>
+    <div class="row wrap local-only">
+      <button type="button" id="yt-connect" class="ghost small" data-i="yt_connect">ബന്ധിപ്പിക്കുക</button>
+      <button type="button" id="yt-disconnect" class="ghost small" data-i="yt_disconnect">ബന്ധം ഒഴിവാക്കുക</button>
+    </div>
+    <p class="muted small-t" data-i="yt_token_note">ബന്ധിപ്പിച്ചാൽ ഒരു Google ലോഗിൻ ടോക്കൺ ഈ PC-യിലെ ഡാറ്റ ഫോൾഡറിൽ സൂക്ഷിക്കും. അത് വീഡിയോ അപ്‌ലോഡ് ചെയ്യാൻ മാത്രം അനുമതിയുള്ളതാണ്. ആ ഫോൾഡർ മറ്റാരുമായും പങ്കിടരുത്.</p>
+  </details>
   <details class="connect local-only" id="connect">
     <summary data-i="cn_summary">Claude-മായി ബന്ധിപ്പിക്കുക (ഓപ്ഷണൽ)</summary>
     <p class="small-t" data-i="cn_intro">ബന്ധിപ്പിച്ചാൽ Claude-ൽ ടൈപ്പ് ചെയ്താൽ മതി, ഉദാ: “ഇന്നത്തെ സ്ട്രീമിലെ മികച്ച 5 നിമിഷങ്ങൾ കണ്ടെത്തി Shorts ആക്കൂ”. ആപ്പ് ഇല്ലാതെയും ഇതെല്ലാം ഇവിടെ തന്നെ ചെയ്യാം.</p>

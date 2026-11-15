@@ -71,6 +71,13 @@
         network: "ആപ്പുമായി ബന്ധപ്പെടാൻ കഴിഞ്ഞില്ല. clipfinder ഓടുന്നുണ്ടോ എന്ന് നോക്കുക.",
         no_session: "അനുമതി ഇല്ല. ടെർമിനലിൽ കാണിച്ച ലിങ്ക് വീണ്ടും തുറക്കുക.",
         internal: "എന്തോ പിശക് സംഭവിച്ചു. ടെർമിനലിൽ വിശദാംശം കാണാം.",
+        yt_not_set_up: "YouTube അപ്‌ലോഡ് സജ്ജമാക്കിയിട്ടില്ല. ക്രമീകരണങ്ങളിലെ ഘട്ടങ്ങൾ നോക്കുക.",
+        yt_not_connected: "YouTube ബന്ധിപ്പിച്ചിട്ടില്ല. ക്രമീകരണങ്ങളിൽ \"ബന്ധിപ്പിക്കുക\" അമർത്തുക.",
+        yt_reconnect: "YouTube ലോഗിൻ കാലഹരണപ്പെട്ടു. ക്രമീകരണങ്ങളിൽ വീണ്ടും \"ബന്ധിപ്പിക്കുക\" അമർത്തുക.",
+        yt_auth_failed: "Google ലോഗിൻ പരാജയപ്പെട്ടു. വീണ്ടും ശ്രമിക്കുക.",
+        yt_quota: "YouTube-ന്റെ ഇന്നത്തെ അപ്‌ലോഡ് പരിധി കഴിഞ്ഞു. നാളെ ശ്രമിക്കുക.",
+        yt_upload_failed: "അപ്‌ലോഡ് പരാജയപ്പെട്ടു. ഇന്റർനെറ്റ് നോക്കി വീണ്ടും ശ്രമിക്കുക (വിശദാംശം ടെർമിനലിൽ).",
+        yt_bad_request: "ശീർഷകമോ വിവരണമോ ശരിയല്ല.",
       },
       err_other: "എന്തോ പിശക് സംഭവിച്ചു.",
       close: "അടയ്ക്കുക",
@@ -122,6 +129,19 @@
       copy_title_x: (t) => `${t}: ശീർഷകം പകർത്തുക`,
       title_copied: "പകർത്തി",
       link_fixed: "ബോക്സിൽ ഒന്നിലധികം ലിങ്ക് ഉണ്ടായിരുന്നു; അവസാനത്തേത് ഉപയോഗിച്ചു.",
+      yt_ok: "ബന്ധിപ്പിച്ചിരിക്കുന്നു. അവസാന സ്ക്രീനിൽ ഓരോ ക്ലിപ്പിനും \"YouTube-ലേക്ക് അപ്‌ലോഡ്\" ബട്ടൺ കാണാം.",
+      yt_need_file: "youtube_client.json ഫയൽ ഡാറ്റ ഫോൾഡറിൽ ഇതുവരെ ഇല്ല (മുകളിലെ ഘട്ടങ്ങൾ നോക്കുക).",
+      yt_ready: "ഫയൽ കിട്ടി. ഇനി \"ബന്ധിപ്പിക്കുക\" അമർത്തുക.",
+      yt_wait: "തുറന്ന ബ്രൗസർ ടാബിൽ Google-ൽ ലോഗിൻ ചെയ്ത് അനുവദിക്കുക…",
+      yt_remote: "ബന്ധിപ്പിക്കുന്നത് PC-യിൽ നേരിട്ട് മാത്രം.",
+      yt_btn: "YouTube-ലേക്ക് അപ്‌ലോഡ്",
+      yt_btn_x: (t) => `${t}: YouTube-ലേക്ക് അപ്‌ലോഡ്`,
+      yt_uploading: "YouTube-ലേക്ക് അപ്‌ലോഡ് ചെയ്യുന്നു",
+      yt_step: "വീഡിയോ അയയ്ക്കുന്നു",
+      yt_done: (p) => `അപ്‌ലോഡ് ആയി (${p})`,
+      yt_studio: "Studio-ൽ തുറക്കുക",
+      yt_need_title: "ശീർഷകം വേണം.",
+      yt_gameplay: "ഗെയിംപ്ലേ ഹൈലൈറ്റ്",
       lay_follow: "ചലനം പിന്തുടരുക", lay_follow_n: "ക്രോപ്പ് ആക്ഷന്റെ കൂടെ നീങ്ങും",
       follow_note: "ക്ലിപ്പ് ഉണ്ടാക്കുമ്പോൾ ക്രോപ്പ് സ്ക്രീനിൽ ചലനം ഉള്ള ഭാഗത്തെ പിന്തുടരും. ഇവിടെ കാണുന്നത് നടുഭാഗം മാത്രം; ശരിയായ ഫലം ഉണ്ടാക്കിയ ക്ലിപ്പിൽ കാണാം.",
       lay_cam: "ഫേസ്‌ക്യാം + ഗെയിം", lay_cam_n: "ഉടൻ വരും",
@@ -195,6 +215,13 @@
         network: "Could not reach the app. Check that clipfinder is running.",
         no_session: "Not allowed. Open the link shown in the terminal again.",
         internal: "Something went wrong. Details are in the terminal.",
+        yt_not_set_up: "YouTube upload is not set up. See the steps in Settings.",
+        yt_not_connected: "YouTube is not connected. Press \"Connect\" in Settings.",
+        yt_reconnect: "The YouTube sign-in has expired. Press \"Connect\" in Settings again.",
+        yt_auth_failed: "Google sign-in failed. Please try again.",
+        yt_quota: "YouTube's upload limit for today is used up. Try tomorrow.",
+        yt_upload_failed: "The upload failed. Check the internet and try again (details in the terminal).",
+        yt_bad_request: "The title or description is not valid.",
       },
       err_other: "Something went wrong.",
       close: "Close",
@@ -246,6 +273,19 @@
       copy_title_x: (t) => `${t}: copy title`,
       title_copied: "Copied",
       link_fixed: "The box had more than one link; the last one was used.",
+      yt_ok: "Connected. On the last screen every clip has an \"Upload to YouTube\" button.",
+      yt_need_file: "The youtube_client.json file is not in the data folder yet (see the steps above).",
+      yt_ready: "File found. Now press \"Connect\".",
+      yt_wait: "Sign in to Google and allow access in the browser tab that opened…",
+      yt_remote: "Connecting is only possible on the PC itself.",
+      yt_btn: "Upload to YouTube",
+      yt_btn_x: (t) => `${t}: upload to YouTube`,
+      yt_uploading: "Uploading to YouTube",
+      yt_step: "Sending the video",
+      yt_done: (p) => `Uploaded (${p})`,
+      yt_studio: "Open in Studio",
+      yt_need_title: "A title is needed.",
+      yt_gameplay: "gameplay highlight",
       lay_follow: "Follow the action", lay_follow_n: "The crop moves with the action",
       follow_note: "When the clip is made, the crop follows the part of the screen that is moving. The preview here shows only the middle; the real result is in the finished clip.",
       lay_cam: "Facecam + game", lay_cam_n: "Coming soon",
@@ -312,6 +352,25 @@
         rv_empty_text: 'Move the slider above towards "More clips", or choose "All".',
         sel_all: "Select all",
         sel_none: "Select none",
+        yt_summary: "Upload straight to YouTube (optional)",
+        yt_intro: "Once connected, a finished Short can be uploaded to your channel with one button. Only the clip you press \"Upload\" on goes to YouTube.",
+        yt_step1: "In Google Cloud Console, turn on \"YouTube Data API v3\" in a project.",
+        yt_step2: "Set up the OAuth consent screen and add your Google account under \"Test users\".",
+        yt_step3: "Credentials → Create credentials → OAuth client ID → \"Desktop app\". Download the JSON file.",
+        yt_step4a: "Rename that file to",
+        yt_step4b: "and put it in the \"All files\" folder (shown above). Then press \"Connect\" here.",
+        yt_connect: "Connect",
+        yt_disconnect: "Disconnect",
+        yt_token_note: "When connected, a Google sign-in token is kept in the data folder on this PC. It can only upload videos. Do not share that folder with anyone.",
+        yt_dlg_title: "Upload to YouTube",
+        yt_game: "Name of the game",
+        yt_game_help: "With a name, the description and hashtags are filled in to match. You can change the description.",
+        yt_desc: "Description",
+        yt_privacy: "Who can watch",
+        yt_private: "Private (only me; publish from Studio after checking)",
+        yt_unlisted: "Unlisted (anyone with the link)",
+        yt_public: "Public (everyone, right away)",
+        yt_upload: "Upload",
         rv_help: "Click a picture to select it · press ▶ to preview",
         make_shorts: "Make Shorts",
         ph_fail: "This video cannot play in the browser. You can watch it after the clip is made.",
@@ -329,11 +388,11 @@
         lowres: "You are seeing a low-resolution copy. When making Shorts, only the chosen parts are downloaded from YouTube in 1080p.",
         saved_here: "Clips are saved on your computer",
         open_folder: "Open folder",
-        open_studio: "Upload on YouTube",
+        open_studio: "Open YouTube's upload page",
         upload_note: "Opens YouTube's upload box and the clips folder. Drag the clip from the folder into the box.",
         to_home: "Home",
         close: "Close",
-        privacy: "Nothing is sent to the internet. Only when you use a YouTube link does yt-dlp use the internet to download that video.",
+        privacy: "Nothing is sent to the internet on its own. A YouTube link makes yt-dlp download that video; and if you set up YouTube upload, only the clip you press Upload on is sent to YouTube.",
         open_video_folder: "Open video folder",
         update_ytdlp: "Update yt-dlp",
         quit: "Close the app",
@@ -423,6 +482,8 @@
     preview: null,      // card currently playing
     progress: null,     // [cfg, job] last drawn on the progress screen
     lastLayout: "blur", // the layout chosen last; new clips start with it
+    uploaded: {},       // clip file name -> { video, privacy } after a YouTube upload
+    game: "",           // game name typed last in the upload box
   };
 
   // ------------------------------------------------------------------ errors
@@ -584,7 +645,7 @@
 
   function drawProgress(cfg, job) {
     let steps, active, pct = null;
-    if (cfg.kind === "render") {
+    if (cfg.kind === "render" || cfg.kind === "upload") {
       steps = cfg.labels.map((l) => [null, typeof l === "function" ? l() : l]);
       const f = job.frac || 0;
       active = Math.min(steps.length - 1, Math.floor(f * steps.length));
@@ -639,6 +700,12 @@
     drawProgress(cfg, { state: "running", stage: "start", frac: null });
     const job = await waitJob((j) => drawProgress(cfg, j));
     state.watching = false;
+    if (cfg.kind === "upload") {
+      if (job.state === "done") state.uploaded[job.result.file] = { video: job.result.video, privacy: job.result.privacy };
+      if (state.result) await showDone(state.result.aid); else await showHome();
+      if (job.state === "error") showError(new ApiErr(job.code || "other", job.message));
+      return;
+    }
     if (job.state === "done") {
       if (cfg.kind === "render") {
         state.result = { aid: job.result.analysis, files: job.result.files, edits: cfg.edits };
@@ -653,6 +720,7 @@
   }
 
   function resumeJob(job) {
+    if (job.kind === "upload") return watchJob({ kind: "upload", title: () => tr("yt_uploading"), sub: "", labels: [() => tr("yt_step")] });
     if (job.kind === "render") {
       return watchJob({ kind: "render", title: () => tr("making_shorts"), sub: "", labels: [() => tr("making_clips")], edits: {} });
     }
@@ -940,8 +1008,15 @@
         try { await navigator.clipboard.writeText(title); copy.textContent = tr("title_copied"); }
         catch (err) { showError({ code: "other" }); }
       } }, tr("copy_title"));
+      const up = state.uploaded[f.file];
+      const yt = up
+        ? h("a", { class: "done-link", href: "https://studio.youtube.com/video/" + encodeURIComponent(up.video) + "/edit",
+                   target: "_blank", rel: "noopener noreferrer" }, tr("yt_done", up.privacy) + " · " + tr("yt_studio"))
+        : (state.app && state.app.youtube.connected
+          ? h("button", { type: "button", class: "ghost", "aria-label": tr("yt_btn_x", title), onclick: () => openUpload(id, f.file, title) }, tr("yt_btn"))
+          : null);
       return h("li", { class: "item" }, h("div", { class: "t" }, h("b", null, title), h("span", null, meta)),
-        h("div", { class: "row" }, copy,
+        h("div", { class: "row wrap" }, yt, copy,
           h("button", { type: "button", class: "ghost", "aria-label": tr("watch_x", title), onclick: () => openPlayer(id, f.file, title) }, tr("watch"))));
     }));
     const openFolder = async () => {
@@ -983,6 +1058,7 @@
       h("dt", null, tr("version")), h("dd", null, s.version));
     $("st-quit").textContent = tr("quit");
     quitArmed = false;
+    showYouTube();
   }
   $("settings-close").addEventListener("click", () => $("settings").close());
   $("st-folder").addEventListener("click", async () => {
@@ -1073,6 +1149,70 @@
       msg.textContent = r.ok ? tr("cn_ok", r.tools) : tr("cn_fail");
     } catch (e) { msg.textContent = ERR[e && e.code] || tr("cn_fail_short"); }
     finally { btn.disabled = false; }
+  });
+
+  // ------------------------------------------------------------------ YouTube upload
+  function describe(title, game) {
+    const tag = game.replace(/[^\p{L}\p{N}]+/gu, "");
+    return title + "\n\n" + (game ? game + " · " : "") + "PS5 " + tr("yt_gameplay") + "\n\n#Shorts " + (tag ? "#" + tag + " " : "") + "#PS5 #Gaming";
+  }
+  let ytAuto = "";      // the description we filled in last; if the user changed it, we leave theirs alone
+  function refill() {
+    if ($("yt-desc").value !== ytAuto) return;
+    ytAuto = describe($("yt-title").value.trim(), $("yt-game").value.trim());
+    $("yt-desc").value = ytAuto;
+  }
+  function openUpload(id, file, title) {
+    $("yt-title").value = title.slice(0, 100);
+    $("yt-game").value = state.game;
+    ytAuto = ""; $("yt-desc").value = ""; refill();
+    $("yt-privacy").value = "private";
+    $("yt-msg").textContent = "";
+    $("yt-go").onclick = async () => {
+      const t = $("yt-title").value.trim();
+      if (!t) { $("yt-msg").textContent = tr("yt_need_title"); return $("yt-title").focus(); }
+      state.game = $("yt-game").value.trim();
+      try {
+        await api("POST", "/api/youtube/upload", { id, file, title: t, description: $("yt-desc").value, privacy: $("yt-privacy").value });
+        $("ytdlg").close();
+        watchJob({ kind: "upload", title: () => tr("yt_uploading"), sub: t, labels: [() => tr("yt_step")] });
+      } catch (e) { $("yt-msg").textContent = ERR[e && e.code] || tr("err_other"); }
+    };
+    $("ytdlg").showModal();
+  }
+  $("yt-title").addEventListener("input", refill);
+  $("yt-game").addEventListener("input", refill);
+  $("ytdlg-close").addEventListener("click", () => $("ytdlg").close());
+
+  let ytPoll = 0;
+  function showYouTube() {
+    const y = (state.app && state.app.youtube) || { client: false, connected: false };
+    const remote = document.body.classList.contains("remote");
+    $("yt-status").textContent = y.connected ? tr("yt_ok") : !y.client ? tr("yt_need_file") : remote ? tr("yt_remote") : tr("yt_ready");
+    $("yt-connect").disabled = !y.client || y.connected;
+    $("yt-disconnect").hidden = !y.connected;
+  }
+  $("yt-connect").addEventListener("click", async () => {
+    try {
+      const r = await api("POST", "/api/youtube/connect", {});
+      if (typeof r.url !== "string" || !r.url.startsWith("https://accounts.google.com/")) throw new ApiErr("yt_auth_failed");
+      window.open(r.url, "_blank", "noopener,noreferrer");
+      $("yt-status").textContent = tr("yt_wait");
+      clearInterval(ytPoll);
+      let tries = 0;
+      ytPoll = setInterval(async () => {
+        tries += 1;
+        try { state.app = await api("GET", "/api/state"); } catch (e) { /* try again */ }
+        if (state.app.youtube.connected || tries > 150 || !$("settings").open) {
+          clearInterval(ytPoll);
+          showYouTube();
+        }
+      }, 2000);
+    } catch (e) { $("yt-status").textContent = ERR[e && e.code] || tr("err_other"); }
+  });
+  $("yt-disconnect").addEventListener("click", async () => {
+    try { state.app.youtube = await api("POST", "/api/youtube/disconnect", {}); showYouTube(); }
+    catch (e) { $("yt-status").textContent = ERR[e && e.code] || tr("err_other"); }
   });
 
   // ------------------------------------------------------------------ language

@@ -99,6 +99,10 @@ def main() -> int:
         print("tools:", state["tools"])
         if need_tools:
             assert state["tools"]["ffmpeg"] and state["tools"]["ffprobe"] and state["tools"]["ytdlp"], "bundled tools not found"
+        # YouTube upload: the part is inside the program and can make a secure connection (ssl is bundled)
+        assert state["youtube"] == {"client": False, "connected": False}, state.get("youtube")
+        st, d = req("POST", "/api/youtube/connect", {})
+        assert st == 400 and json.loads(d)["error"] == "yt_not_set_up", ("youtube", st, d)
         st, d = req("POST", "/api/analyze", {"kind": "file", "path": video})
         assert st == 200, d
         job = wait_job()
