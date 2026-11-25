@@ -940,7 +940,7 @@ def detection_is_old(version) -> bool:
 def find_candidates(sig: dict, p: Params, duration: float) -> list:
     """Candidates for these settings. With p.min_count, a long stream that is busy all the time (where few moments
     stand out from their own surroundings) is searched again a little less strictly, up to three times, so there
-    is still something to choose from. Moments already found keep their place; new ones only fill up the list."""
+    is still something to choose from. The list is in order of strength."""
     curves, static, dbg = compute_curves(sig, p)
     cands = build_candidates(curves, static, p, duration, dbg.get("flat"))
     active_min = float((~static).sum()) * BIN / 60.0
@@ -958,6 +958,7 @@ def find_candidates(sig: dict, p: Params, duration: float) -> list:
             if not any(min(c["end"], k["end"]) - max(c["start"], k["start"]) > 0.3 * min(c["duration"], k["duration"])
                        for k in cands):
                 cands.append(c)
+    cands.sort(key=lambda c: -c["score"])     # one order for the whole list, so the strength bars go down
     for i, c in enumerate(cands, 1):
         c["id"] = i
     return cands
