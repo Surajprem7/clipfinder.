@@ -177,6 +177,9 @@ def make_params(preset: str, sensitivity: int) -> cf.Params:
     p.z_min = round(1.0 + sensitivity * 0.02, 3)           # 0 -> 1.0 (more clips) ... 100 -> 3.0 (stricter)
     p.min_score = round(0.1 + 0.3 * sensitivity / 100, 3)  # 50 -> the engine defaults (2.0 / 0.25)
     p.tag_min = min(0.25, p.min_score)
+    # a long, busy stream can have few moments that stand out from their own surroundings: then look again a
+    # little less strictly so there is still a choice. "More accuracy" (right side of the slider) asks for fewer.
+    p.min_count = 10 if sensitivity <= 50 else 6 if sensitivity <= 75 else 3
     return p
 
 
@@ -692,6 +695,7 @@ class App:
                 "sensitivity": meta.get("sensitivity", 50) if isinstance(meta.get("sensitivity"), int) else 50,
                 "source_ok": os.path.isfile(video) and os.path.splitext(video)[1].lower() in VIDEO_EXT,
                 "ext": os.path.splitext(video)[1].lower(), "low_res": bool(meta.get("low_res")),
+                "old": cf.detection_is_old(data.get("version")),
                 "clips": clips, "made": self.store.made(aid)}
 
     # ---- jobs

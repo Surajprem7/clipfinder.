@@ -352,7 +352,7 @@ class TestEndToEnd(unittest.TestCase):
 
         info = p.data(p.tool("app_info"))
         self.assertEqual(info["version"], m.cf.__version__)
-        self.assertEqual(sorted(info["layouts"]), ["blur", "crop", "follow"])
+        self.assertEqual(sorted(info["layouts"]), ["blur", "crop", "follow", "zoom"])
         self.assertTrue(info["ffmpeg"])
         self.assertTrue(info["pictures_allowed"])
         self.assertNotIn(self.tmp, json.dumps(info))                    # no folder paths
@@ -396,7 +396,7 @@ class TestEndToEnd(unittest.TestCase):
         self.assertTrue(p.tool("make_clips", {"analysis": aid, "run": got["run"],
                                               "clips": [{"id": first["id"]}, {"id": first["id"]}]})["result"]["isError"])
         self.assertTrue(p.tool("make_clips", {"analysis": aid, "run": got["run"],
-                                              "clips": [{"id": first["id"], "layout": "zoom"}]})["result"]["isError"])
+                                              "clips": [{"id": first["id"], "layout": "square"}]})["result"]["isError"])
         self.assertTrue(p.tool("make_clips", {"analysis": aid, "run": got["run"],
                                               "clips": [{"id": first["id"], "start": 5, "end": 5.2}]})["result"]["isError"])
 

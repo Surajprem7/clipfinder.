@@ -38,12 +38,12 @@ import threading
 import time
 import unicodedata
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass, field, fields
+from dataclasses import dataclass, field, fields, replace
 
 import numpy as np
 from numpy.lib.stride_tricks import sliding_window_view
 
-__version__ = "1.5.0"
+__version__ = "1.6.0"
 
 BIN = 0.5              # seconds per analysis bin
 SR = 16000             # audio sample rate used for analysis
@@ -51,6 +51,9 @@ SPEECH_LO, SPEECH_HI = 300.0, 3400.0   # speech band in Hz
 FF_IN = ["-protocol_whitelist", "file,pipe"]   # local files only: never follow URLs or playlists inside a media file
 VID_FPS = 4            # frames per second sampled for motion
 VID_W, VID_H = 64, 36  # tiny grayscale frames are enough for motion
+UI_LAG_S = 10.0        # a picture is compared with the one this many seconds earlier to find menu-like screens
+DETECT_VERSION = (1, 6)  # analyses made by an older engine are looked at again (fast: the signals are re-read once)
+BREAK_S = 1.0          # a flat (black) stretch at least this long inside a clip is a scene break; the clip is cut there
 
 DETECTORS = {
     "loud_peak": (
@@ -112,9 +115,11 @@ class Params:
     keep_static: bool = False    # keep windows that are mostly a still picture (menus)
     static_thr: float = 0.2      # motion below this counts as "still picture"
     flat_thr: float = 2.0        # picture detail below this counts as a flat screen (loading, end card)
+    ui_thr: float = 10.0         # picture that changes less than this over 10 s counts as a menu / puzzle / map screen
     slowmo_trigger: bool = True  # slow_motion must follow an intense moment
     slowmo_ratio: float = 0.5    # motion must fall to <= this fraction of the recent peak
     slowmo_min_s: float = 2.0
+    min_count: int = 0           # if fewer clips than this are found, look again a little less strictly (0 = off)
 
 
 # --------------------------------------------------------------------------- helpers
@@ -468,7 +473,8 @@ def _video_motion(path: str, expected: float = 0.0, progress=None):
     ]
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
     size = VID_W * VID_H
-    prev, diffs, det = None, [], []
+    lag = int(VID_FPS * UI_LAG_S)
+    prev, diffs, det, same, ring = None, [], [], [], []
     try:
         while True:
             if CANCEL.is_set():
@@ -484,19 +490,25 @@ def _video_motion(path: str, expected: float = 0.0, progress=None):
             g = f.reshape(VID_H, VID_W)
             # detail = average step between neighbouring pixels: a smooth gradient has almost none
             det.append(float(np.abs(np.diff(g, axis=1)).mean() + np.abs(np.diff(g, axis=0)).mean()))
+            # change against the picture UI_LAG_S seconds ago: menus, puzzles and maps stay almost the same
+            ring.append(f)
+            same.append(float(np.abs(f - ring[0]).mean()) if len(ring) > lag else np.nan)
+            if len(ring) > lag:
+                ring.pop(0)
             prev = f
     finally:
         proc.stdout.close()
         proc.wait()
-    d, e = np.array(diffs), np.array(det)
+    d, e, s = np.array(diffs), np.array(det), np.array(same, dtype=float)
     if len(d) > 1:
         d[0] = d[1]
+    known = np.flatnonzero(np.isfinite(s))
+    s[: known[0] if len(known) else len(s)] = s[known[0]] if len(known) else 255.0   # very short file: never "same"
     per_bin = int(round(VID_FPS * BIN))
     nb = len(d) // per_bin
     if not nb:
-        return np.zeros(0), np.zeros(0)
-    return (d[: nb * per_bin].reshape(nb, per_bin).mean(axis=1),
-            e[: nb * per_bin].reshape(nb, per_bin).mean(axis=1))
+        return np.zeros(0), np.zeros(0), np.zeros(0)
+    return tuple(x[: nb * per_bin].reshape(nb, per_bin).mean(axis=1) for x in (d, e, s))
 
 
 def _fit(x: np.ndarray, n: int, fill: float) -> np.ndarray:
@@ -508,7 +520,7 @@ def _fit(x: np.ndarray, n: int, fill: float) -> np.ndarray:
 
 def source_key(path: str) -> str:
     st = os.stat(path)
-    return f"{os.path.abspath(path)}|{st.st_size}|{st.st_mtime_ns}|sig3"
+    return f"{os.path.abspath(path)}|{st.st_size}|{st.st_mtime_ns}|sig4"
 
 
 def extract_signals(path: str, info: dict, quiet: bool = False, progress=None) -> dict:
@@ -517,7 +529,7 @@ def extract_signals(path: str, info: dict, quiet: bool = False, progress=None) -
     with ThreadPoolExecutor(max_workers=2) as pool:
         fa = pool.submit(_audio_features, path) if info["has_audio"] else None
         fv = pool.submit(_video_motion, path, info["duration"] * VID_FPS, progress)
-        M, D = fv.result()
+        M, D, S = fv.result()
         L, C, V, R = fa.result() if fa else (np.zeros(0),) * 4
     n = int(info["duration"] / BIN) if info["duration"] > 0 else max(len(M), len(L))
     n = max(n, 1)
@@ -530,6 +542,7 @@ def extract_signals(path: str, info: dict, quiet: bool = False, progress=None) -
         "R": _fit(R, n, -10.0) if info["has_audio"] else np.full(n, -10.0),
         "M": _fit(M, n, 0.0),
         "D": _fit(D, n, 50.0),
+        "S": _fit(S, n, 255.0),
         "has_audio": np.array(bool(info["has_audio"])),
     }
     log(f"  decoded in {time.time() - t0:.0f}s", quiet)
@@ -544,7 +557,7 @@ def load_or_extract(path: str, info: dict, out: str, reuse: bool, quiet: bool, p
             with np.load(cache, allow_pickle=False) as z:
                 if str(z["key"]) == key:
                     log("Using cached signals (change conditions freely - this is instant).", quiet)
-                    return {k: z[k] for k in ("L", "C", "V", "R", "M", "D", "has_audio")}
+                    return {k: z[k] for k in ("L", "C", "V", "R", "M", "D", "S", "has_audio")}
         except Exception:
             pass
     sig = extract_signals(path, info, quiet, progress)
@@ -568,7 +581,12 @@ def compute_curves(sig: dict, p: Params):
     Ls, Ms, Cs = smooth(L), smooth(M), smooth(C)
     # "static" = a still picture (menu) OR a flat screen with no picture detail (loading / end card)
     flat = smooth(np.asarray(sig["D"], float)) < p.flat_thr
-    static = (Ms < p.static_thr) | flat
+    # "same screen for a long time" = menu, puzzle, map, inventory: the picture 10 s later is almost the same
+    if "S" in sig:
+        ui = rolling_median(np.asarray(sig["S"], float), _odd(int(UI_LAG_S / BIN))) < p.ui_thr
+    else:
+        ui = np.zeros(n, dtype=bool)
+    static = (Ms < p.static_thr) | flat | ui
     k5, k6, k8 = int(5 / BIN), int(6 / BIN), int(8 / BIN)
 
     # motion and pitch are compared in the log domain (they change by factors, not amounts)
@@ -618,9 +636,16 @@ def compute_curves(sig: dict, p: Params):
         depth = float(clip01(1.0 - float(ratio[a:b].mean()) / max(p.slowmo_ratio, 1e-6)))
         slow[a] = float(clip01(secs / 6.0)) * (0.5 + 0.5 * depth) * a_factor   # one event per run
 
+    # coming out of a menu / puzzle / black screen makes the whole picture change at once; that jump is a scene
+    # change, not action, so picture-based moments right after a still stretch do not count (a burst that is
+    # mostly sound, like a shot after silence, still does)
+    after_still = prev_mean(static.astype(float), k8) >= 0.4
+    motion = np.where(after_still, 0.0, motion)
+    slow = np.where(after_still, 0.0, slow)
+    qtb = np.where(after_still & (zM >= zL), 0.0, qtb)
     curves.update(loud_peak=loud, motion_burst=motion, quiet_then_burst=qtb, slow_motion=slow,
                   voice_excitement=voice)
-    return curves, static, {"zL": zL, "zM": zM, "zC": zC, "Ms": Ms, "flat": flat}
+    return curves, static, {"zL": zL, "zM": zM, "zC": zC, "Ms": Ms, "flat": flat, "ui": ui}
 
 
 def pick_events(curve: np.ndarray, thr: float, sep_bins: int):
@@ -650,10 +675,12 @@ def normalize_params(p: Params) -> Params:
             die(f"setting '{name}' must be true or false")
     if isinstance(p.top, bool) or not isinstance(p.top, int) or not 1 <= p.top <= 500:
         die(f"setting 'top' must be a whole number between 1 and 500 (got {p.top!r})")
+    if isinstance(p.min_count, bool) or not isinstance(p.min_count, int) or not 0 <= p.min_count <= 100:
+        die(f"setting 'min_count' must be a whole number between 0 and 100 (got {p.min_count!r})")
     for name, lo, hi in (("min_score", 0, 1), ("tag_min", 0, 1), ("z_min", 0, 12), ("baseline_s", 20, 3600),
                          ("merge_gap", 0, 300), ("pre", 0, 300), ("post", 0, 300), ("min_len", 1, 900),
                          ("max_len", 1, 900), ("skip_start", 0, 1e7), ("skip_end", 0, 1e7),
-                         ("static_thr", 0, 10), ("flat_thr", 0, 50), ("slowmo_ratio", 0.05, 1), ("slowmo_min_s", 0, 120)):
+                         ("static_thr", 0, 10), ("flat_thr", 0, 50), ("ui_thr", 0, 100), ("slowmo_ratio", 0.05, 1), ("slowmo_min_s", 0, 120)):
         setattr(p, name, _num(name, getattr(p, name), lo, hi))
     for name, val in p.weights.items():
         _num(f"weights.{name}", val, 0, 100)
@@ -673,7 +700,56 @@ def normalize_params(p: Params) -> Params:
     return p
 
 
-def build_candidates(curves: dict, static: np.ndarray, p: Params, duration: float):
+def cut_at_breaks(start: float, end: float, t: float, breaks, lo: float, hi: float, min_len: float):
+    """Keep only the part of [start, end] around the moment t that has no scene break (black / loading screen of
+    BREAK_S or more) in it. If that part is short, grow it on the sides that are not a break, up to min_len.
+    Returns (start, end), or None if t itself is inside a break."""
+    nb = len(breaks)
+    i = int(t / BIN)
+    if nb == 0:
+        return start, end
+    if 0 <= i < nb and breaks[i]:
+        return None
+    need = max(1, int(round(BREAK_S / BIN)))
+    walls = [(a * BIN, b * BIN) for a, b in runs(np.asarray(breaks, bool)) if b - a >= need]
+    left = max([b for a, b in walls if b <= t] + [lo])     # nearest break end before t
+    right = min([a for a, b in walls if a >= t] + [hi])    # nearest break start after t
+    s, e = max(start, left), min(end, right)
+    if e - s < min_len:
+        grow = min_len - (e - s)
+        add = min(grow, right - e)
+        e += add
+        s = max(left, s - (grow - add))
+    return round(s, 2), round(e, 2)
+
+
+def trim_still_edges(start: float, end: float, t: float, static, lo: float, hi: float, min_len: float):
+    """Drop a still stretch (menu, puzzle, black) at the start or end of a clip, then, if the clip got short, add
+    moving picture on the other side. The moment t is always kept."""
+    n = len(static)
+    if n == 0:
+        return start, end
+    a, b, i = int(start / BIN), min(n, int(math.ceil(end / BIN))), min(n - 1, max(0, int(t / BIN)))
+    if static[i:i + 3].any():
+        return start, end       # the moment itself is on (or just before) a still screen: leave it to the menu check
+    while a < i and static[a]:
+        a += 1
+    while b - 1 > i and static[b - 1]:
+        b -= 1
+    s, e = max(start, a * BIN), min(end, b * BIN)
+    lo_b, hi_b = int(lo / BIN), min(n, int(hi / BIN))
+    while e - s < min_len:
+        nb, na = int(round(e / BIN)), int(round(s / BIN)) - 1
+        if nb < hi_b and not static[nb]:
+            e += BIN
+        elif na >= lo_b and not static[na]:
+            s -= BIN
+        else:
+            break
+    return round(s, 2), round(e, 2)
+
+
+def build_candidates(curves: dict, static: np.ndarray, p: Params, duration: float, breaks=None):
     w = {d: float(p.weights.get(d, DEFAULT_WEIGHTS[d])) for d in DETECTORS}
     events = []
     for d in p.use:
@@ -705,6 +781,12 @@ def build_candidates(curves: dict, static: np.ndarray, p: Params, duration: floa
         if start < lo:
             end = min(hi, end + (lo - start))
             start = lo
+        if breaks is not None:
+            cut = cut_at_breaks(start, end, best[0], breaks, lo, hi, p.min_len)
+            if cut is None:
+                continue
+            start, end = cut
+        start, end = trim_still_edges(start, end, best[0], static, lo, hi, p.min_len)
         if end - start < 3:
             continue
         a = int(start / BIN)
@@ -847,6 +929,40 @@ def build_html(data: dict, thumbs: dict, out_dir: str) -> str:
 
 # --------------------------------------------------------------------------- analyze / render
 
+def detection_is_old(version) -> bool:
+    """True if a saved analysis was made by an engine older than DETECT_VERSION (or has no usable version)."""
+    try:
+        return tuple(int(x) for x in str(version).split(".")[:2]) < DETECT_VERSION
+    except ValueError:
+        return True
+
+
+def find_candidates(sig: dict, p: Params, duration: float) -> list:
+    """Candidates for these settings. With p.min_count, a long stream that is busy all the time (where few moments
+    stand out from their own surroundings) is searched again a little less strictly, up to three times, so there
+    is still something to choose from. Moments already found keep their place; new ones only fill up the list."""
+    curves, static, dbg = compute_curves(sig, p)
+    cands = build_candidates(curves, static, p, duration, dbg.get("flat"))
+    active_min = float((~static).sum()) * BIN / 60.0
+    want = min(p.min_count, p.top, max(3, int(active_min / 3)))
+    q = p
+    for _ in range(3):
+        if len(cands) >= want:
+            break
+        q = replace(q, z_min=max(1.0, q.z_min - 0.4), min_score=max(0.08, q.min_score * 0.7),
+                    tag_min=max(0.1, q.tag_min * 0.7))
+        c2, s2, d2 = compute_curves(sig, q)
+        for c in build_candidates(c2, s2, q, duration, d2.get("flat")):
+            if len(cands) >= want:
+                break
+            if not any(min(c["end"], k["end"]) - max(c["start"], k["start"]) > 0.3 * min(c["duration"], k["duration"])
+                       for k in cands):
+                cands.append(c)
+    for i, c in enumerate(cands, 1):
+        c["id"] = i
+    return cands
+
+
 def analyze(video: str, out: str | None, p: Params, reuse: bool = True, thumbs: bool = True,
             quiet: bool = False, progress=None, write_report: bool = True) -> dict:
     """progress(stage, fraction) is called as the work goes on: stage 'read' (slow, once per file),
@@ -862,8 +978,7 @@ def analyze(video: str, out: str | None, p: Params, reuse: bool = True, thumbs: 
         die("the video is shorter than 10 seconds")
     sig = load_or_extract(video, info, out, reuse, quiet, progress)
     emit("detect", 0.0)
-    curves, static, _ = compute_curves(sig, p)
-    cands = build_candidates(curves, static, p, info["duration"])
+    cands = find_candidates(sig, p, info["duration"])
     run_id = hashlib.sha1(f"{time.time()}{video}{p}".encode("utf-8", "replace"), usedforsecurity=False).hexdigest()[:8]
     data = {
         "version": __version__, "run_id": run_id, "video": os.path.abspath(video),
@@ -987,7 +1102,8 @@ def print_evaluation(res: dict, tolerance: float) -> None:
     print(f"\n(a candidate window counts if it comes within {tolerance:g}s of the marked moment)")
 
 
-LAYOUTS = ("blur", "crop", "follow")
+LAYOUTS = ("blur", "crop", "follow", "zoom")
+FOLLOW_CENTRE_PULL = 0.5     # in a third-person game the hero is usually near the middle: trust movement only half way
 FOLLOW_FPS = 8               # frames per second looked at to find where the action is
 FOLLOW_W, FOLLOW_H = 96, 54  # tiny grayscale frames are enough for that
 FOLLOW_MAX_KEYS = 120        # at most this many turning points in the crop path (keeps the ffmpeg command short)
@@ -1011,7 +1127,8 @@ def follow_centres(frames: np.ndarray) -> np.ndarray:
         if extra.mean() < 0.25 or col.mean() > 40.0:      # too quiet, or a hard cut / flash
             continue
         peak = extra >= 0.5 * extra.max()                 # the strongest part only, not faint movement elsewhere
-        out[i] = float((xs[peak] * extra[peak]).sum() / extra[peak].sum())
+        x = float((xs[peak] * extra[peak]).sum() / extra[peak].sum())
+        out[i] = 0.5 + (x - 0.5) * (1.0 - FOLLOW_CENTRE_PULL)
     return out
 
 
@@ -1046,7 +1163,12 @@ def follow_path(centres: np.ndarray, dur: float, view: float) -> list:
     return [(round(float(t), 3), round(float(v), 4)) for t, v in zip(times, vals)]
 
 
-def find_follow_path(video: str, start: float, dur: float, width: int, height: int) -> list:
+def view_share(layout: str, width: int, height: int) -> float:
+    """Width of the moving crop as a share of the picture width: 9:16 for 'follow', a square for 'zoom'."""
+    return min(1.0, height * (1.0 if layout == "zoom" else 9 / 16) / width) if width > 0 else 1.0
+
+
+def find_follow_path(video: str, start: float, dur: float, width: int, height: int, layout: str = "follow") -> list:
     """Look at one clip (small and gray) and work out the crop path that keeps the action in view."""
     cmd = [tool("ffmpeg"), "-nostdin", "-v", "error", *FF_IN, "-ss", f"{start:.2f}", "-i", video, "-t", f"{dur:.2f}",
            "-an", "-vf", f"fps={FOLLOW_FPS},scale={FOLLOW_W}:{FOLLOW_H}:flags=area,format=gray", "-f", "rawvideo", "-"]
@@ -1066,8 +1188,7 @@ def find_follow_path(video: str, start: float, dur: float, width: int, height: i
         proc.wait()
     if len(frames) < 2:
         return [(0.0, 0.5)]
-    view = (height * 9 / 16) / width
-    return follow_path(follow_centres(np.stack(frames)), dur, view)
+    return follow_path(follow_centres(np.stack(frames)), dur, view_share(layout, width, height))
 
 
 def path_expression(path: list) -> str:
@@ -1079,15 +1200,22 @@ def path_expression(path: list) -> str:
     return "clip(" + "".join(terms) + ",0,1)"
 
 
+BLUR_BG = "[bg]scale=135:240:force_original_aspect_ratio=increase,crop=135:240,boxblur=4:1,scale=1080:1920[b];"
+
+
 def build_filter(layout: str, crop_x: float, width: int, height: int, path: list | None = None) -> str:
+    if layout == "zoom" and path and width > height:
+        # a square from the game, following the action, 1080 x 1080 in the middle of a blurred copy of the picture
+        return ("[0:v]split=2[bg][fg];" + BLUR_BG +
+                f"[fg]crop=w='trunc(ih/2)*2':h=ih:x='(iw-out_w)*{path_expression(path)}':y=0,scale=1080:1080[f];"
+                "[b][f]overlay=0:(H-h)/2,format=yuv420p[v]")
     if layout == "follow" and path and wide_enough(width, height):
         return (f"[0:v]crop=w='trunc(ih*9/16/2)*2':h=ih:x='(iw-out_w)*{path_expression(path)}':y=0,"
                 f"scale=1080:1920,format=yuv420p[v]")
     if layout == "crop" and wide_enough(width, height):
         return (f"[0:v]crop=w='trunc(ih*9/16/2)*2':h=ih:x='(iw-out_w)*{crop_x:.3f}':y=0,"
                 f"scale=1080:1920,format=yuv420p[v]")
-    return ("[0:v]split=2[bg][fg];"
-            "[bg]scale=135:240:force_original_aspect_ratio=increase,crop=135:240,boxblur=4:1,scale=1080:1920[b];"
+    return ("[0:v]split=2[bg][fg];" + BLUR_BG +
             "[fg]scale=1080:1920:force_original_aspect_ratio=decrease[f];"
             "[b][f]overlay=(W-w)/2:(H-h)/2,format=yuv420p[v]")
 
@@ -1123,8 +1251,9 @@ PROGRESS_KEYS = ("frame=", "fps=", "stream_", "bitrate=", "total_size=", "out_ti
 def render_clip(video: str, start: float, dur: float, target: str, layout: str, crop_x: float,
                 width: int, height: int, progress=None) -> None:
     """Cut one clip into a 1080x1920 file. progress(fraction) is called while ffmpeg works.
-    layout 'follow' first looks at the clip to find where the action is, then crops along that path."""
-    path = find_follow_path(video, start, dur, width, height) if layout == "follow" and wide_enough(width, height) else None
+    layouts 'follow' and 'zoom' first look at the clip to find where the action is, then crop along that path."""
+    moving = (layout == "follow" and wide_enough(width, height)) or (layout == "zoom" and width > height)
+    path = find_follow_path(video, start, dur, width, height, layout) if moving else None
     cmd = [tool("ffmpeg"), "-nostdin", "-y", "-v", "error", "-progress", "pipe:1", "-nostats", *FF_IN,
            "-ss", f"{start:.2f}", "-i", video, "-t", f"{dur:.2f}",
            "-filter_complex", build_filter(layout, crop_x, width, height, path),
@@ -1158,7 +1287,7 @@ def render_clip(video: str, start: float, dur: float, target: str, layout: str, 
 
 def render_items(out: str, items: list, run: str | None = None, quiet: bool = False, progress=None,
                  fetch=None) -> list:
-    """Render clips. items: dicts with id, start, end (seconds), layout ('blur'|'crop'), crop_x (0..1), title.
+    """Render clips. items: dicts with id, start, end (seconds), layout ('blur'|'crop'|'follow'|'zoom'), crop_x (0..1), title.
     progress(done_index, total, fraction_of_current). Returns [{'id', 'file', 'path'}].
     fetch(clip_id, start, duration, index, total), if given, may return (file, start_in_file, width, height) to cut
     from a different file than the analysed one (e.g. a full-quality section), or None to use the analysed video."""
@@ -1188,7 +1317,7 @@ def render_items(out: str, items: list, run: str | None = None, quiet: bool = Fa
         if not (1.0 <= end - start <= 180.0):
             die("a clip must be between 1 and 180 seconds long")
         if layout not in LAYOUTS:
-            die("layout must be 'blur', 'crop' or 'follow'")
+            die("layout must be 'blur', 'crop', 'follow' or 'zoom'")
         if not 0.0 <= crop_x <= 1.0:
             die("crop position must be between 0 and 1")
         clean.append((cid, start, end - start, layout, crop_x, title[:120]))

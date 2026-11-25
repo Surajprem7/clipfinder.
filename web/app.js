@@ -122,7 +122,9 @@
       to_clips: "ക്ലിപ്പുകളിലേക്ക്",
       can_make: (n) => `${n} Shorts ഉണ്ടാക്കാം`,
       make_n: (n) => `${n} Shorts ഉണ്ടാക്കുക `,
-      lay_blur: "ബ്ലർ പശ്ചാത്തലം", lay_blur_n: "ശുപാർശ",
+      lay_blur: "ബ്ലർ പശ്ചാത്തലം", lay_blur_n: "മുഴുവൻ സ്ക്രീനും",
+      lay_zoom: "സൂം + പിന്തുടരുക", lay_zoom_n: "ശുപാർശ · വലുതായി, ആക്ഷന്റെ കൂടെ",
+      zoom_note: "ഗെയിമിന്റെ ഒരു ചതുരഭാഗം വലുതാക്കി കാണിക്കും; അത് ആക്ഷന്റെ കൂടെ നീങ്ങും. ഇവിടെ നടുഭാഗം മാത്രം; ശരിയായ ഫലം ഉണ്ടാക്കിയ ക്ലിപ്പിൽ.",
       lay_crop: "ക്രോപ്പ്", lay_crop_n: "സ്ക്രീൻ നിറയും",
       sel_all: "എല്ലാം തിരഞ്ഞെടുക്കുക", sel_none: "ഒന്നും വേണ്ട",
       all_same: (n) => `ഈ ലേഔട്ട് എല്ലാ ${n} ക്ലിപ്പിനും`,
@@ -280,7 +282,9 @@
       to_clips: "Back to clips",
       can_make: (n) => `Make ${n} Shorts`,
       make_n: (n) => `Make ${n} Shorts `,
-      lay_blur: "Blurred background", lay_blur_n: "Recommended",
+      lay_blur: "Blurred background", lay_blur_n: "The whole screen",
+      lay_zoom: "Zoom + follow", lay_zoom_n: "Recommended · bigger, moves with the action",
+      zoom_note: "A square part of the game is shown bigger and moves with the action. The preview shows only the middle; the real result is in the finished clip.",
       lay_crop: "Crop", lay_crop_n: "Fills the screen",
       sel_all: "Select all", sel_none: "Select none",
       all_same: (n) => `Use this layout for all ${n} clips`,
@@ -520,7 +524,7 @@
     result: null,       // last render result
     preview: null,      // card currently playing
     progress: null,     // [cfg, job] last drawn on the progress screen
-    lastLayout: "blur", // the layout chosen last; new clips start with it
+    lastLayout: "zoom", // the layout chosen last; new clips start with it
     uploaded: {},       // clip file name -> { video, privacy } after a YouTube upload
     game: "",           // game name typed last in the upload box
     update: null,       // answer of /api/update
@@ -786,6 +790,8 @@
     $("rv-empty").hidden = a.clips.length > 0;
     drawGrid();
     if (opts.keepScroll) window.scrollTo(0, opts.keepScroll);
+    // made by an older version of the app: look again with the newer rules (once; the video is already here)
+    if (a.old && a.source_ok && !opts.noAuto) redetect(a.preset, a.sensitivity, true);
   }
 
   function drawGrid() {
@@ -882,7 +888,7 @@
     close.focus();
   }
 
-  async function redetect(preset, sens) {
+  async function redetect(preset, sens, auto = false) {
     const a = state.a;
     if (!a) return;
     const y = window.scrollY;
@@ -893,7 +899,7 @@
       const job = await waitJob();
       if (job.state === "error") throw new ApiErr(job.code || "other", job.message);
       state.selRun = null;
-      await showReview(a.id, { keepScroll: y });
+      await showReview(a.id, { keepScroll: y, noAuto: auto });
     } catch (e) {
       showError(e);
       for (const b of document.querySelectorAll("#presets button, #sens")) b.disabled = false;
@@ -939,7 +945,7 @@
     const c = list.find((x) => x.id === state.cur), e = state.edits[c.id];
     $("mk-tabs").replaceChildren(...list.map((x) => h("button", { type: "button", class: "chip", "aria-pressed": x.id === state.cur ? "true" : "false",
       onclick: () => { state.cur = x.id; pausePreview(); drawMake(); } }, tr("clip_n", x.id))));
-    const defs = [["blur", tr("lay_blur"), tr("lay_blur_n")], ["crop", tr("lay_crop"), tr("lay_crop_n")], ["follow", tr("lay_follow"), tr("lay_follow_n")], ["cam", tr("lay_cam"), tr("lay_cam_n")]];
+    const defs = [["zoom", tr("lay_zoom"), tr("lay_zoom_n")], ["blur", tr("lay_blur"), tr("lay_blur_n")], ["crop", tr("lay_crop"), tr("lay_crop_n")], ["follow", tr("lay_follow"), tr("lay_follow_n")], ["cam", tr("lay_cam"), tr("lay_cam_n")]];
     $("layouts").replaceChildren(...defs.map(([k, name, note]) => h("button", { type: "button", class: "layout", "aria-pressed": e.layout === k ? "true" : "false", disabled: k === "cam",
       onclick: () => { e.layout = k; state.lastLayout = k; $("all-same-msg").textContent = ""; drawMake(); } },
       h("span", { class: "mini " + k }), h("span", { class: "nm" }, h("b", null, name), h("span", null, note)))));
@@ -950,8 +956,8 @@
       $("all-same-msg").textContent = tr("all_same_done");
     };
     $("crop-row").hidden = e.layout !== "crop";
-    $("follow-note").hidden = e.layout !== "follow";
-    $("follow-note").textContent = tr("follow_note");
+    $("follow-note").hidden = e.layout !== "follow" && e.layout !== "zoom";
+    $("follow-note").textContent = tr(e.layout === "zoom" ? "zoom_note" : "follow_note");
     $("cropx").value = Math.round(e.crop_x * 100);
     const [lo, hi] = window_(c);
     for (const id of ["trim-a", "trim-b"]) { $(id).min = lo; $(id).max = hi; }
@@ -982,6 +988,7 @@
     $("trim-a").setAttribute("aria-valuetext", fmt(e.start));
     $("trim-b").setAttribute("aria-valuetext", fmt(e.end));
     $("phone").classList.toggle("crop", e.layout === "crop" || e.layout === "follow");
+    $("phone").classList.toggle("zoom", e.layout === "zoom");
     $("phone").style.setProperty("--cx", (e.layout === "follow" ? 50 : Math.round(e.crop_x * 100)) + "%");
     $("ph-title").textContent = e.title;
   }

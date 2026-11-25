@@ -327,6 +327,79 @@ class TestFlatScreen(unittest.TestCase):
             cf.normalize_params(cf.Params(flat_thr=-1))
 
 
+class TestSceneRules(unittest.TestCase):
+    """v1.6: menu/puzzle screens, scene changes, black breaks inside a clip, still edges, and filling a short list."""
+
+    def sig(self, n=1200, seed=4):
+        rng = np.random.default_rng(seed)
+        return {"L": -30 + rng.normal(0, 0.8, n), "C": np.full(n, 1500.0), "V": np.full(n, -50.0),
+                "R": np.full(n, -6.0), "M": 8 + rng.normal(0, 0.5, n), "D": np.full(n, 12.0),
+                "S": np.full(n, 33.0), "has_audio": np.array(True)}
+
+    def cands(self, sig, **kw):
+        p = cf.normalize_params(cf.Params(**kw))
+        curves, static, dbg = cf.compute_curves(sig, p)
+        return cf.build_candidates(curves, static, p, len(sig["M"]) * cf.BIN, dbg.get("flat"))
+
+    def test_puzzle_screen_with_moving_pieces_is_not_a_clip(self):
+        s = self.sig()
+        s["M"][:400] = 0.3 + np.random.default_rng(1).normal(0, 0.05, 400)   # quiet screen ...
+        s["S"][:400] = 3.0                                                   # ... that hardly changes in 10 s
+        s["M"][200:206] = 6.0                                                # a piece moves: big jump for it
+        self.assertFalse([c for c in self.cands(s) if c["start"] < 200 * cf.BIN])
+        s["S"][:400] = 33.0                                                  # same jump in real play is kept
+        self.assertTrue([c for c in self.cands(s) if 90 <= c["start"] <= 103])
+
+    def test_scene_change_after_a_menu_is_not_action(self):
+        s = self.sig()
+        s["M"][:400], s["S"][:400] = 0.1, 2.0                                # menu ...
+        s["M"][400:404] = 40.0                                               # ... then the game comes back
+        self.assertFalse([c for c in self.cands(s) if c["start"] < 215 <= c["end"]])
+
+    def test_black_break_cuts_the_clip(self):
+        s = self.sig()
+        s["M"][600:604] = 25.0                                               # action at 300 s
+        s["D"][612:620] = 0.5                                                # black from 306 to 310 s
+        c = [c for c in self.cands(s) if c["start"] <= 300 <= c["end"]]
+        self.assertTrue(c)
+        self.assertLessEqual(c[0]["end"], 306.5)                             # (+ one bin of smoothing)
+        self.assertGreaterEqual(c[0]["duration"], 15.0)                      # grown on the side away from black
+
+    def test_cut_at_breaks_helper(self):
+        br = np.zeros(200, bool); br[100:106] = True
+        self.assertEqual(cf.cut_at_breaks(40.0, 60.0, 45.0, br, 0, 100, 15), (35.0, 50.0))
+        self.assertIsNone(cf.cut_at_breaks(40.0, 60.0, 51.0, br, 0, 100, 15))
+        self.assertEqual(cf.cut_at_breaks(40.0, 60.0, 45.0, np.zeros(200, bool), 0, 100, 15), (40.0, 60.0))
+
+    def test_still_start_is_trimmed(self):
+        st = np.zeros(200, bool); st[40:60] = True                          # still from 20 to 30 s
+        self.assertEqual(cf.trim_still_edges(22.0, 42.0, 31.0, st, 0, 100, 15), (30.0, 45.0))
+        self.assertEqual(cf.trim_still_edges(22.0, 42.0, 25.0, st, 0, 100, 15), (22.0, 42.0))  # moment is still
+
+    def test_busy_stream_still_gives_a_choice(self):
+        s = self.sig(n=4800)
+        rng = np.random.default_rng(9)
+        for k in range(10):                                                  # ten small bumps in busy play
+            i = 300 + k * 420
+            s["M"][i:i + 3] += 3.5 + rng.normal(0, 0.2)
+        few = cf.find_candidates(s, cf.normalize_params(cf.Params()), 2400.0)
+        more = cf.find_candidates(s, cf.normalize_params(cf.Params(min_count=8)), 2400.0)
+        self.assertGreater(len(more), len(few))
+        self.assertLessEqual(len(more), 8)
+        self.assertEqual([c["id"] for c in more], list(range(1, len(more) + 1)))
+        with self.assertRaises(SystemExit):
+            cf.normalize_params(cf.Params(min_count=-1))
+
+    def test_old_analyses_are_recognised(self):
+        for v, old in (("1.5.0", True), ("1.6.0", False), ("2.0", False), ("x", True), (None, True), ("0.9.1", True)):
+            self.assertEqual(cf.detection_is_old(v), old, v)
+
+    def test_old_signal_files_without_S_still_work(self):
+        s = self.sig()
+        del s["S"]
+        cf.compute_curves(s, cf.normalize_params(cf.Params()))
+
+
 class TestFollowCrop(unittest.TestCase):
     """Layout 'follow': the crop moves sideways to keep the action in the picture."""
 
@@ -343,7 +416,23 @@ class TestFollowCrop(unittest.TestCase):
         self.assertTrue(np.isnan(c[0]))
         got = c[1:]
         self.assertTrue(np.all(np.isfinite(got)))
-        self.assertLess(np.abs(got - np.array(xs[1:])).max(), 0.12)
+        pulled = 0.5 + (np.array(xs[1:]) - 0.5) * (1 - cf.FOLLOW_CENTRE_PULL)   # trusted half way, towards the middle
+        self.assertLess(np.abs(got - pulled).max(), 0.12)
+        self.assertTrue(np.all(np.diff(got[::5]) > 0))                          # still moves the right way
+
+    def test_zoom_view_is_a_square_and_follow_is_9_16(self):
+        self.assertAlmostEqual(cf.view_share("zoom", 1920, 1080), 0.5625)
+        self.assertAlmostEqual(cf.view_share("follow", 1920, 1080), 0.31640625)
+        self.assertEqual(cf.view_share("zoom", 1080, 1920), 1.0)
+
+    def test_zoom_filter_puts_a_square_on_a_blurred_background(self):
+        f = cf.build_filter("zoom", 0.5, 1920, 1080, [(0.0, 0.2), (5.0, 0.8)])
+        self.assertIn("crop=w='trunc(ih/2)*2'", f)
+        self.assertIn("scale=1080:1080", f)
+        self.assertIn("boxblur", f)
+        self.assertIn("overlay=0:(H-h)/2", f)
+        # a portrait source has no room to move: it falls back to the blurred layout
+        self.assertNotIn("1080:1080", cf.build_filter("zoom", 0.5, 1080, 1920, [(0.0, 0.5)]))
 
     def test_still_picture_and_whole_screen_change_give_no_centre(self):
         still = cf.follow_centres(self.frames([0.5] * 10))
@@ -396,13 +485,15 @@ class TestFollowCrop(unittest.TestCase):
                             "-f", "lavfi", "-i", "color=c=white:s=40x40:r=30:d=12",
                             "-filter_complex", "[0][1]overlay=x='20+t/12*560':y=160[v]", "-map", "[v]",
                             "-c:v", "libx264", "-pix_fmt", "yuv420p", src], check=True)
-            def box_positions(layout):
+            def box_positions(layout, rows=slice(0, 96)):
                 cf.render_clip(src, 0.0, 12.0, out, layout, 0.5, 640, 360)
+                self.assertEqual((ffprobe(out)["streams"][0]["width"], ffprobe(out)["streams"][0]["height"]), (1080, 1920))
                 raw = subprocess.run([cf.tool("ffmpeg"), "-v", "error", "-i", out, "-vf", "fps=1,scale=54:96,format=gray",
                                       "-f", "rawvideo", "-"], capture_output=True, check=True).stdout
                 frames = np.frombuffer(raw, np.uint8).reshape(-1, 96, 54)
-                return [bool((f.max(axis=0) > 200).any()) for f in frames[2:10]]
-            self.assertTrue(all(box_positions("follow")))          # always in the picture
+                return [bool((f[rows].max(axis=0) > 200).any()) for f in frames[1:11]]
+            self.assertTrue(all(box_positions("follow")[1:9]))     # always in the picture
+            self.assertTrue(all(box_positions("zoom", slice(22, 74))))   # the sharp square keeps it, edges too
             self.assertFalse(all(box_positions("crop")))           # a fixed crop loses it
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
@@ -611,7 +702,7 @@ class TestRenderSource(WithSample):
     def test_bad_items_are_refused(self):
         good = {"id": 1, "start": 30.0, "end": 38.0}
         for bad in ({"id": 99}, {"id": True}, {"end": 30.5}, {"start": float("nan")},
-                    {"layout": "zoom"}, {"crop_x": 2}, {"start": "x"}):
+                    {"layout": "square"}, {"crop_x": 2}, {"start": "x"}):
             with self.assertRaises(SystemExit, msg=bad):
                 cf.render_items(self.out, [{**good, **bad}], quiet=True)
         with self.assertRaises(SystemExit):

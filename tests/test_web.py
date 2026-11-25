@@ -280,6 +280,7 @@ class TestWorkflow(Base):
         self.assertEqual(self.req("GET", f"/thumb/{aid}/9999.jpg")[0], 404)
         self.assertEqual(self.req("GET", f"/thumb/{aid}/x.jpg")[0], 404)
         # render two clips, one trimmed, one cropped
+        self.assertFalse(a["old"])                       # made by this version: no need to look again
         c1, c2 = a["clips"][0], a["clips"][1]
         items = [
             {"id": c1["id"], "start": c1["start"] + 2, "end": c1["start"] + 12, "layout": "follow", "crop_x": 0.5,
@@ -1574,21 +1575,28 @@ class TestInBrowser(Base):
             for _ in range(4):
                 pg.keyboard.press("ArrowRight")
             self.assertNotEqual(pg.inner_text("#trim-text"), before)
-            pg.locator("button.layout").nth(1).click()
+            # zoom + follow is first and chosen by default (recommended)
+            self.assertEqual(pg.get_attribute("button.layout >> nth=0", "aria-pressed"), "true")
+            self.assertEqual(pg.get_attribute("#phone", "class"), "phone zoom")
+            self.assertTrue(pg.is_visible("#follow-note"))
+            pg.locator("button.layout").nth(1).click()                             # blurred background
+            self.assertEqual(pg.get_attribute("#phone", "class"), "phone")
+            self.assertFalse(pg.is_visible("#follow-note"))
+            pg.locator("button.layout").nth(2).click()                             # fixed crop
             self.assertEqual(pg.get_attribute("#phone", "class"), "phone crop")
-            self.assertTrue(pg.locator("button.layout").nth(3).is_disabled())      # the coming-soon layout
-            pg.locator("button.layout").nth(2).click()                             # follow the action
+            self.assertTrue(pg.locator("button.layout").nth(4).is_disabled())      # the coming-soon layout
+            pg.locator("button.layout").nth(3).click()                             # follow the action
             self.assertTrue(pg.is_visible("#follow-note"))
             self.assertFalse(pg.is_visible("#crop-row"))
             self.assertEqual(pg.get_attribute("#phone", "class"), "phone crop")
-            pg.locator("button.layout").nth(1).click()
+            pg.locator("button.layout").nth(2).click()
             self.assertFalse(pg.is_visible("#follow-note"))
             # one press gives every clip this layout
             self.assertTrue(pg.is_visible("#all-same"))
             pg.click("#all-same")
             self.assertNotEqual(pg.inner_text("#all-same-msg"), "")
             pg.locator("#mk-tabs button").nth(1).click()
-            self.assertEqual(pg.get_attribute("button.layout >> nth=1", "aria-pressed"), "true")
+            self.assertEqual(pg.get_attribute("button.layout >> nth=2", "aria-pressed"), "true")
             pg.locator("#mk-tabs button").nth(0).click()
             self.assertFalse(pg.is_visible("#trim-long"))                        # the clip is under a minute
             pg.fill("#title", "ടെസ്റ്റ് ക്ലിപ്പ്")
