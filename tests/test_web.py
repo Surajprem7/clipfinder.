@@ -281,6 +281,11 @@ class TestWorkflow(Base):
         self.assertEqual(self.req("GET", f"/thumb/{aid}/x.jpg")[0], 404)
         # render two clips, one trimmed, one cropped
         self.assertFalse(a["old"])                       # made by this version: no need to look again
+        self.assertEqual(max(c["pct"] for c in a["clips"]), 100)   # the best moment of the stream fills the bar
+        self.assertEqual(w.level_of(0.2, 1, 9), "high")         # busy stream: its best third still counts high
+        self.assertEqual(w.level_of(0.2, 5, 9), "mid")
+        self.assertEqual(w.level_of(0.2, 9, 9), "low")
+        self.assertEqual(w.level_of(0.7, 9, 9), "high")         # a strong moment is high wherever it is
         c1, c2 = a["clips"][0], a["clips"][1]
         items = [
             {"id": c1["id"], "start": c1["start"] + 2, "end": c1["start"] + 12, "layout": "follow", "crop_x": 0.5,

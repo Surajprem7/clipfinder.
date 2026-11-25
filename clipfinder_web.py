@@ -165,8 +165,15 @@ def peak_time(c: dict) -> float:
     return (c["start"] + c["end"]) / 2
 
 
-def level_of(score: float) -> str:
-    return "high" if score >= 0.6 else "mid" if score >= 0.4 else "low"
+def level_of(score: float, rank: int = 0, count: int = 0) -> str:
+    """How strong a moment is. Scores compare a moment with its own surroundings, so in a stream that is busy all
+    the time even the best moments score low; there the first third of the list (the stream's best) still counts
+    as high and the next third as middle."""
+    by_score = 2 if score >= 0.6 else 1 if score >= 0.4 else 0
+    by_rank = 0
+    if count >= 3 and rank > 0:
+        by_rank = 2 if rank <= max(1, count // 3) else 1 if rank <= max(2, 2 * count // 3) else 0
+    return ("low", "mid", "high")[max(by_score, by_rank)]
 
 
 def make_params(preset: str, sensitivity: int) -> cf.Params:
@@ -682,11 +689,13 @@ class App:
         data = self.store.load(aid)
         video = data["video"]
         clips = []
-        for c in data["candidates"]:
+        cands = data["candidates"]
+        top = max([c["score"] for c in cands] + [1e-6])  # the bar is full for the best moment of this stream
+        for rank, c in enumerate(cands, 1):
             clips.append({
                 "id": c["id"], "start": c["start"], "end": c["end"], "duration": c["duration"],
-                "peak": round(peak_time(c), 2), "score": c["score"], "pct": int(round(min(1.0, c["score"]) * 100)),
-                "level": level_of(c["score"]), "tags": [t for t in c.get("tags", []) if t in cf.DETECTORS],
+                "peak": round(peak_time(c), 2), "score": c["score"], "pct": int(round(min(1.0, c["score"] / top) * 100)),
+                "level": level_of(c["score"], rank, len(cands)), "tags": [t for t in c.get("tags", []) if t in cf.DETECTORS],
                 "flags": [f for f in c.get("flags", []) if isinstance(f, str)],
             })
         return {"id": aid, "name": meta["name"], "kind": meta.get("kind", "file"), "run": data["run_id"],
