@@ -1,6 +1,7 @@
 @echo off
 rem clipfinder: one-time setup on Windows (for the source folder, not for ClipFinder-Setup.exe).
-rem Installs Python, ffmpeg (with winget, which comes with Windows 10/11) and the Python parts numpy + yt-dlp.
+rem Installs Python, ffmpeg (with winget, which comes with Windows 10/11) and the Python parts numpy + yt-dlp,
+rem and (unless you press N) the AI helper: llama.cpp + one model, about 3.5 GB, into the 'data\ai' folder.
 rem Safe to run again: anything already installed is skipped.
 setlocal
 where winget >nul 2>nul
@@ -10,7 +11,7 @@ if errorlevel 1 (
   exit /b 1
 )
 echo.
-echo [1/3] Python
+echo [1/4] Python
 rem Find a Python that really runs. "where python" is not enough: Windows has a "python" shortcut that only
 rem opens the Microsoft Store, so each candidate is started once to prove it works.
 set "PY="
@@ -35,10 +36,10 @@ if not defined PY (
 )
 echo Python: %PY%
 echo.
-echo [2/3] ffmpeg
+echo [2/4] ffmpeg
 where ffmpeg >nul 2>nul || winget install -e --id Gyan.FFmpeg --accept-package-agreements --accept-source-agreements
 echo.
-echo [3/3] numpy and yt-dlp
+echo [3/4] numpy and yt-dlp
 %PY% -m pip install --upgrade numpy yt-dlp
 if errorlevel 1 (
   echo.
@@ -46,6 +47,16 @@ if errorlevel 1 (
   pause
   exit /b 1
 )
+echo.
+echo [4/4] AI helper for titles and descriptions (optional, runs on this PC only, about 3.5 GB)
+echo Press N within 20 seconds to skip it. It starts by itself otherwise.
+choice /C YN /T 20 /D Y /M "Download the AI helper"
+if errorlevel 2 goto noai
+%PY% "%~dp0clipfinder_ai_setup.py" --data "%~dp0..\data"
+if errorlevel 1 (
+  echo The AI helper is not ready, but everything else is. Run this setup again later to continue the download.
+)
+:noai
 echo.
 echo Done. CLOSE this window, then double-click start_clipfinder.bat
 echo (a new window sees the newly installed programs).

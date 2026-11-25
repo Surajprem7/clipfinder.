@@ -78,7 +78,7 @@
         yt_quota: "YouTube-ന്റെ ഇന്നത്തെ അപ്‌ലോഡ് പരിധി കഴിഞ്ഞു. നാളെ ശ്രമിക്കുക.",
         yt_upload_failed: "അപ്‌ലോഡ് പരാജയപ്പെട്ടു. ഇന്റർനെറ്റ് നോക്കി വീണ്ടും ശ്രമിക്കുക (വിശദാംശം ടെർമിനലിൽ).",
         yt_bad_request: "ശീർഷകമോ വിവരണമോ ശരിയല്ല.",
-        ai_not_running: "Ollama ഓടുന്നില്ല. അത് തുറന്ന ശേഷം വീണ്ടും ശ്രമിക്കുക.",
+        ai_not_running: "AI ഓടുന്നില്ല. Ollama / LM Studio ആണെങ്കിൽ അത് തുറന്ന ശേഷം വീണ്ടും ശ്രമിക്കുക.",
         ai_no_model: "AI മോഡൽ തിരഞ്ഞെടുത്തിട്ടില്ല (ക്രമീകരണങ്ങൾ → AI സഹായി).",
         ai_failed: "AI-ക്ക് ഇത് എഴുതാൻ കഴിഞ്ഞില്ല. വീണ്ടും ശ്രമിക്കുക, അല്ലെങ്കിൽ മറ്റൊരു മോഡൽ നോക്കുക.",
       },
@@ -135,13 +135,13 @@
       title_copied: "പകർത്തി",
       link_fixed: "ബോക്സിൽ ഒന്നിലധികം ലിങ്ക് ഉണ്ടായിരുന്നു; അവസാനത്തേത് ഉപയോഗിച്ചു.",
       update_text: (latest, cur) => `പുതിയ പതിപ്പ് v${latest} ഉണ്ട് (ഇപ്പോൾ v${cur}).`,
-      ai_off: "Ollama ഓടുന്നില്ല (അല്ലെങ്കിൽ ഇൻസ്റ്റാൾ ചെയ്തിട്ടില്ല).",
+      ai_off: "AI ഇതുവരെ ഇല്ല. മുകളിലെ എളുപ്പ വഴി ചെയ്യുക.",
       ai_none: "Ollama ഓടുന്നുണ്ട്, പക്ഷേ ഒരു മോഡലും ഇല്ല. മുകളിലെ രണ്ടാം ഘട്ടം ചെയ്യുക.",
       ai_pick: "ഒരു മോഡൽ തിരഞ്ഞെടുക്കുക.",
       ai_ready: (m) => `തയ്യാർ: ${m}. അവസാന സ്ക്രീനിലെ ക്ലിപ്പിന്റെ ബോക്സിൽ \"AI കൊണ്ട് എഴുതിക്കുക\" അമർത്താം.`,
       ai_choose: "(തിരഞ്ഞെടുക്കുക)",
-      ai_working: "AI എഴുതുന്നു… (ഒരു മിനിറ്റോ അതിലധികമോ എടുക്കാം)",
-      ai_done: "AI എഴുതി. വായിച്ച് തിരുത്തുക.",
+      ai_working: "AI എഴുതുന്നു… (ഒരു മിനിറ്റോ അതിലധികമോ എടുക്കാം; ആദ്യ തവണ മോഡൽ തുറക്കാൻ കൂടുതൽ സമയം)",
+      ai_done: (s) => `AI എഴുതി (${s} സെക്കൻഡ്). വായിച്ച് തിരുത്തുക.`,
       ai_setup: "AI സഹായി സജ്ജമാക്കിയിട്ടില്ല (ക്രമീകരണങ്ങൾ നോക്കുക).",
       details_btn: "ശീർഷകവും വിവരണവും",
       details_btn_x: (t) => `${t}: ശീർഷകവും വിവരണവും`,
@@ -238,7 +238,7 @@
         yt_quota: "YouTube's upload limit for today is used up. Try tomorrow.",
         yt_upload_failed: "The upload failed. Check the internet and try again (details in the terminal).",
         yt_bad_request: "The title or description is not valid.",
-        ai_not_running: "Ollama is not running. Open it and try again.",
+        ai_not_running: "The AI is not running. If you use Ollama / LM Studio, open it and try again.",
         ai_no_model: "No AI model is chosen (Settings → AI helper).",
         ai_failed: "The AI could not write this. Try again, or try another model.",
       },
@@ -295,13 +295,13 @@
       title_copied: "Copied",
       link_fixed: "The box had more than one link; the last one was used.",
       update_text: (latest, cur) => `A newer version v${latest} is available (you have v${cur}).`,
-      ai_off: "Ollama is not running (or not installed).",
+      ai_off: "No AI yet. Do the easy way above.",
       ai_none: "Ollama is running, but has no model. Do step 2 above.",
       ai_pick: "Choose a model.",
       ai_ready: (m) => `Ready: ${m}. In a clip's box on the last screen you can press \"Write with AI\".`,
       ai_choose: "(choose)",
-      ai_working: "The AI is writing… (may take a minute or more)",
-      ai_done: "Written by the AI. Read it and correct it.",
+      ai_working: "The AI is writing… (may take a minute or more; the first time it also has to open the model)",
+      ai_done: (s) => `Written by the AI (${s} seconds). Read it and correct it.`,
       ai_setup: "The AI helper is not set up (see Settings).",
       details_btn: "Title and description",
       details_btn_x: (t) => `${t}: title and description`,
@@ -387,9 +387,13 @@
         update_link: "Get it from GitHub",
         ai_summary: "AI helper: writes titles and descriptions (optional, on this PC only)",
         ai_intro: "An AI model running on this PC looks at pictures from the clip and suggests a title, a description and hashtags. Nothing goes to the internet. Finding clips still works without AI.",
-        ai_step1a: "Install the free program Ollama:",
-        ai_step2a: "In a black window (Command Prompt) run this once; it downloads a model that can see pictures (about 3 GB):",
-        ai_step3: "Choose that model here below.",
+        ai_lang: "AI language",
+        ai_lang_ml: "Malayalam (experimental: more mistakes)",
+        ai_easy: "Easy way: close ClipFinder and run",
+        ai_easy2: "once more. Its last step downloads the AI (about 3.5 GB, only once). Nothing else to install or open.",
+        ai_other: "Or use your own Ollama (",
+        ai_other2: ") or LM Studio (with its local server on).",
+        ai_step3: "Choose the model here below. local/gemma-3-4b = this app's own AI.",
         ai_model: "Model",
         ai_refresh: "Check again",
         ai_note: "Small models make mistakes, and their Malayalam can be poor. Read and correct the text before using it. Without a good graphics card one description can take a minute or more.",
@@ -1227,11 +1231,11 @@
       $("yt-ai").disabled = true;
       $("yt-ai-msg").textContent = tr("ai_working");
       try {
-        const r = await api("POST", "/api/ai/describe", { id, file, game: $("yt-game").value.trim(), title: $("yt-title").value.trim().slice(0, 100), lang });
+        const r = await api("POST", "/api/ai/describe", { id, file, game: $("yt-game").value.trim(), title: $("yt-title").value.trim().slice(0, 100), lang: $("yt-ai-lang").value });
         $("yt-title").value = r.title;
         $("yt-desc").value = r.description;
         ytAuto = "";                                         // from here on the text is not refilled by the template
-        $("yt-ai-msg").textContent = tr("ai_done");
+        $("yt-ai-msg").textContent = tr("ai_done", r.seconds || 0);
       } catch (e) { $("yt-ai-msg").textContent = ERR[e && e.code] || tr("err_other"); }
       $("yt-ai").disabled = false;
     };

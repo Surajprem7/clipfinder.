@@ -89,12 +89,12 @@ class WithFake(unittest.TestCase):
 
 class TestAiModule(WithFake):
     def test_lists_only_well_formed_model_names(self):
-        self.assertEqual(ai.status(), {"running": True, "models": ["gemma3:4b", "llava:latest"]})
+        self.assertEqual(ai.status(), {"running": True, "models": ["gemma3:4b", "llava:latest"], "local": False, "local_on": False})
 
     def test_not_running_is_reported_not_raised(self):
         port, ai.PORT = ai.PORT, 1
         try:
-            self.assertEqual(ai.status(), {"running": False, "models": []})
+            self.assertEqual(ai.status(), {"running": False, "models": [], "local": False, "local_on": False})
             with self.assertRaises(ai.AiError) as cm:
                 ai.describe("gemma3:4b", b"\xff\xd8x", "", "")
             self.assertEqual(cm.exception.code, "not_running")
@@ -131,16 +131,21 @@ class TestAiModule(WithFake):
 
     def test_only_this_computer_and_only_standard_library(self):
         src = read(os.path.join(ROOT, "clipfinder_ai.py"))
-        self.assertIn('HOST, PORT = "127.0.0.1", 11434', src)
-        self.assertEqual(re.findall(r"https?://[^\s\"')]+", src), ["https://ollama.com"])     # in the explanation only
+        self.assertIn('HOST = "127.0.0.1"', src)
+        self.assertEqual(src.count("HTTPConnection("), 1)                                    # one place connects ...
+        self.assertIn("http.client.HTTPConnection(HOST,", src)                               # ... always to HOST
+        self.assertEqual(re.findall(r"https?://[^\s\"')]+", src), [])
         self.assertNotIn("HTTPSConnection", src)
+        self.assertIn('"--host", HOST', src)                                                 # own server: this PC only
+        self.assertIn('"--api-key", self.key', src)
         mods = set()
         for node in ast.walk(ast.parse(src)):
             if isinstance(node, ast.Import):
                 mods |= {a.name.split(".")[0] for a in node.names}
             elif isinstance(node, ast.ImportFrom) and node.module:
                 mods.add(node.module.split(".")[0])
-        self.assertLessEqual(mods, {"__future__", "base64", "http", "json", "re", "sys"})
+        self.assertLessEqual(mods, {"__future__", "base64", "http", "json", "os", "re", "secrets", "socket",
+                                    "subprocess", "sys", "threading", "time", "ctypes"})
 
 
 class TestUpdateModule(WithFake):
@@ -190,7 +195,8 @@ class TestThroughTheApp(WithFake, Base):
 
     def test_model_choice_is_saved_and_must_be_an_installed_model(self):
         self.jpost("/api/ai/model", {"model": ""})
-        self.assertEqual(self.jget("/api/ai")[1], {"running": True, "models": ["gemma3:4b", "llava:latest"], "model": ""})
+        self.assertEqual(self.jget("/api/ai")[1], {"running": True, "models": ["gemma3:4b", "llava:latest"], "model": "",
+                                                   "local": False, "local_on": False})
         for bad in ("not-installed", "a b", 5, None, ["gemma3:4b"]):
             st, d = self.jpost("/api/ai/model", {"model": bad})
             self.assertEqual((st, d["error"]), (400, "ai_no_model"), bad)
@@ -234,6 +240,172 @@ class TestThroughTheApp(WithFake, Base):
         js = read(os.path.join(ROOT, "web", "app.js"))
         for code in set(w.AI_CODES.values()):
             self.assertEqual(len(re.findall(r"^\s{8}%s: \"" % code, js, re.M)), 2, code)
+
+
+FAKE_LLAMA = r'''#!/usr/bin/env python3
+# stands in for llama-server: same arguments, same /health and /v1/chat/completions, checks the key
+import http.server, json, sys, time
+a = sys.argv
+arg = lambda k: a[a.index(k) + 1]
+host, port, key = arg("--host"), int(arg("--port")), arg("--api-key")
+assert arg("--mmproj").endswith(".gguf") and arg("-m").endswith(".gguf") and "--no-webui" in a
+t0 = time.time()
+class H(http.server.BaseHTTPRequestHandler):
+    def log_message(self, *x): pass
+    def send(self, st, obj):
+        d = json.dumps(obj).encode(); self.send_response(st); self.send_header("Content-Length", str(len(d))); self.end_headers(); self.wfile.write(d)
+    def do_GET(self):
+        if self.path == "/health":
+            return self.send(503, {"error": "Loading model"}) if time.time() - t0 < 1.0 else self.send(200, {"status": "ok"})
+        self.send(404, {})
+    def do_POST(self):
+        if self.headers.get("Authorization") != "Bearer " + key:
+            return self.send(401, {"error": "bad key"})
+        body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+        part = body["messages"][0]["content"]
+        ok = part[1]["image_url"]["url"].startswith("data:image/jpeg;base64,") and body["response_format"]["type"] == "json_schema"
+        ans = {"title": "Local AI title", "description": "Seen by the local model." if ok else "bad request", "hashtags": ["Spider"]}
+        self.send(200, {"choices": [{"message": {"role": "assistant", "content": json.dumps(ans)}}]})
+http.server.HTTPServer((host, port), H).serve_forever()
+'''
+
+
+class TestLocalEngine(WithFake):
+    """The app's own llama.cpp: started on first use with a private key, on this PC only, stopped at the end."""
+
+    def setUp(self):
+        import tempfile
+        super().setUp()
+        self.tmp = tempfile.TemporaryDirectory()
+        aid = os.path.join(self.tmp.name, "ai")
+        os.makedirs(os.path.join(aid, "llama-b1"))
+        os.makedirs(os.path.join(aid, "models"))
+        server = os.path.join(aid, "llama-b1", "llama-server")
+        with open(server, "w") as fh:
+            fh.write(FAKE_LLAMA.replace("#!/usr/bin/env python3", "#!" + sys.executable))
+        os.chmod(server, 0o755)
+        for f in ("m.gguf", "p.gguf"):
+            open(os.path.join(aid, "models", f), "wb").close()
+        with open(os.path.join(aid, "ready.json"), "w") as fh:
+            json.dump({"server": "llama-b1/llama-server", "model": "models/m.gguf", "mmproj": "models/p.gguf"}, fh)
+        ai.configure(self.tmp.name)
+
+    def tearDown(self):
+        ai.shutdown()
+        ai.configure("")
+        self.tmp.cleanup()
+        super().tearDown()
+
+    def test_listed_first_started_on_use_and_stopped(self):
+        st = ai.status()
+        self.assertEqual(st["models"][0], ai.LOCAL_MODEL)
+        self.assertTrue(st["local"])
+        self.assertFalse(st["local_on"])                       # not started just by looking
+        out = ai.describe(ai.LOCAL_MODEL, b"\xff\xd8pic", "Marvel's Spider-Man 2", "", "en")
+        self.assertEqual(out["title"], "Local AI title")
+        self.assertTrue(out["description"].startswith("Seen by the local model."))
+        self.assertIsInstance(out["seconds"], int)
+        self.assertTrue(ai.status()["local_on"])
+        p = ai.LOCAL.proc
+        ai.describe(ai.LOCAL_MODEL, b"\xff\xd8pic", "", "", "en")    # second time: the same program
+        self.assertIs(ai.LOCAL.proc, p)
+        ai.shutdown()
+        self.assertIsNotNone(p.poll())
+        self.assertFalse(ai.status()["local_on"])
+
+    def test_without_the_key_the_server_refuses(self):
+        ai.LOCAL.start()
+        with self.assertRaises(ai.AiError):
+            ai._call("POST", "/v1/chat/completions", {"x": 1}, port=ai.LOCAL.port)
+
+    def test_files_outside_the_ai_folder_or_missing_are_refused(self):
+        rj = os.path.join(self.tmp.name, "ai", "ready.json")
+        for bad in ({"server": "../../bin/sh", "model": "models/m.gguf", "mmproj": "models/p.gguf"},
+                    {"server": "/bin/sh", "model": "models/m.gguf", "mmproj": "models/p.gguf"},
+                    {"server": "llama-b1/llama-server", "model": "models/none.gguf", "mmproj": "models/p.gguf"},
+                    {"server": "llama-b1/llama-server"}, [1]):
+            with open(rj, "w") as fh:
+                json.dump(bad, fh)
+            self.assertFalse(ai.LOCAL.installed(), bad)
+            self.assertNotIn(ai.LOCAL_MODEL, ai.status()["models"])
+            with self.assertRaises(ai.AiError) as cm:
+                ai.describe(ai.LOCAL_MODEL, b"\xff\xd8", "", "")
+            self.assertEqual(cm.exception.code, "no_model")
+
+    def test_a_program_that_dies_is_reported(self):
+        server = os.path.join(self.tmp.name, "ai", "llama-b1", "llama-server")
+        with open(server, "w") as fh:
+            fh.write("#!" + sys.executable + "\nraise SystemExit(3)\n")
+        with self.assertRaises(ai.AiError) as cm:
+            ai.describe(ai.LOCAL_MODEL, b"\xff\xd8", "", "")
+        self.assertEqual(cm.exception.code, "failed")
+
+    def test_lm_studio_models_are_offered_and_used(self):
+        class LMS(http.server.BaseHTTPRequestHandler):
+            def log_message(self, *a):
+                pass
+
+            def send(self, obj):
+                d = json.dumps(obj).encode()
+                self.send_response(200)
+                self.send_header("Content-Length", str(len(d)))
+                self.end_headers()
+                self.wfile.write(d)
+
+            def do_GET(self):
+                self.send({"data": [{"id": "google/gemma-3-4b"}, {"id": "bad id!"}]})
+
+            def do_POST(self):
+                body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+                LMS.model = body["model"]
+                self.send({"choices": [{"message": {"content": json.dumps({"title": "LM", "description": "d", "hashtags": []})}}]})
+
+        srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), LMS)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        old, ai.LMSTUDIO_PORT = ai.LMSTUDIO_PORT, srv.server_address[1]
+        try:
+            self.assertEqual(ai.status()["models"][:2], [ai.LOCAL_MODEL, "lmstudio/google/gemma-3-4b"])
+            self.assertEqual(ai.describe("lmstudio/google/gemma-3-4b", b"\xff\xd8", "", "")["title"], "LM")
+            self.assertEqual(LMS.model, "google/gemma-3-4b")
+        finally:
+            ai.LMSTUDIO_PORT = old
+            srv.shutdown()
+
+
+class TestAiSetup(unittest.TestCase):
+    def test_zip_with_a_path_outside_is_refused(self):
+        import tempfile
+        import zipfile
+        import clipfinder_ai_setup as setup
+        with tempfile.TemporaryDirectory() as d:
+            for bad in ("../evil.txt", "/abs.txt", "a/../../x", "C:/x"):
+                z = os.path.join(d, "x.zip")
+                with zipfile.ZipFile(z, "w") as zf:
+                    zf.writestr(bad, "x")
+                with self.assertRaises(setup.SetupError):
+                    setup.safe_extract(z, os.path.join(d, "out"))
+            with zipfile.ZipFile(z, "w") as zf:
+                zf.writestr("llama-server.exe", "x")
+                zf.writestr("ggml-cpu.dll", "x")
+            os.makedirs(os.path.join(d, "ok"))
+            setup.safe_extract(z, os.path.join(d, "ok"))
+            self.assertTrue(setup.find_server(os.path.join(d, "ok")).endswith("llama-server.exe"))
+
+    def test_downloads_only_from_the_two_fixed_https_places_and_are_checked(self):
+        src = read(os.path.join(ROOT, "clipfinder_ai_setup.py"))
+        urls = set(re.findall(r"https?://[^\s\"'{}]+", src))
+        self.assertTrue(all(u.startswith(("https://api.github.com/repos/ggml-org/llama.cpp/",
+                                          "https://github.com/ggml-org/llama.cpp/", "https://huggingface.co/"))
+                            for u in urls), urls)
+        self.assertIn("sha256_of(part) != sha", src)
+        self.assertIn('raise SetupError(f"no checksum published for {name}")', src)
+
+    def test_setup_bat_offers_the_ai_and_keeps_windows_line_ends(self):
+        with open(os.path.join(ROOT, "setup_windows.bat"), "rb") as fh:
+            raw = fh.read()
+        self.assertNotIn(b"\n", raw.replace(b"\r\n", b""))
+        self.assertIn(b'clipfinder_ai_setup.py" --data "%~dp0..\\data"', raw)
+        self.assertIn(b"choice /C YN /T 20 /D Y", raw)
 
 
 class TestInBrowser(WithFake, Base):

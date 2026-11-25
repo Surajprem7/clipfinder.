@@ -225,3 +225,4 @@ select.text{appearance:auto}
 .update-bar{margin:0;padding:10px 20px;background:#1d2a1f;border-bottom:1px solid #2f4a34;color:var(--text);font-size:14px;text-align:center}
 .update-bar a{color:var(--text);margin-left:8px}
 .ai-select{width:auto;min-width:220px;flex:1;height:40px}
+.small-sel{width:auto;height:36px;padding:0 8px}

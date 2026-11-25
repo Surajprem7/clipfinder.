@@ -235,6 +235,8 @@
   <div class="field"><label for="yt-desc" class="big-s" data-i="yt_desc">വിവരണം</label>
     <textarea id="yt-desc" class="text" rows="6" maxlength="4500"></textarea>
     <div class="row wrap"><button type="button" id="yt-ai" class="ghost small" data-i="ai_write">AI കൊണ്ട് എഴുതിക്കുക</button>
+      <label for="yt-ai-lang" class="small-t" data-i="ai_lang">AI-യുടെ ഭാഷ</label>
+      <select id="yt-ai-lang" class="text small-sel"><option value="en">English</option><option value="ml" data-i="ai_lang_ml">മലയാളം (പരീക്ഷണം: തെറ്റുകൾ കൂടും)</option></select>
       <button type="button" id="yt-copy" class="ghost small" data-i="copy_desc">വിവരണം പകർത്തുക</button>
       <span id="yt-ai-msg" class="muted small-t" role="status"></span></div></div>
   <div class="field" id="yt-privacy-field"><label for="yt-privacy" class="big-s" data-i="yt_privacy">ആർക്ക് കാണാം</label>
@@ -261,9 +263,9 @@
     <summary data-i="ai_summary">AI സഹായി: ശീർഷകവും വിവരണവും എഴുതാൻ (ഓപ്ഷണൽ, ഈ PC-യിൽ മാത്രം)</summary>
     <p class="small-t" data-i="ai_intro">ഈ PC-യിൽ തന്നെ ഓടുന്ന ഒരു AI മോഡൽ ക്ലിപ്പിലെ ചിത്രങ്ങൾ നോക്കി ശീർഷകം, വിവരണം, ഹാഷ്‌ടാഗുകൾ എന്നിവ നിർദ്ദേശിക്കും. ഒന്നും ഇന്റർനെറ്റിലേക്ക് പോകില്ല. ക്ലിപ്പ് കണ്ടെത്തൽ ഇപ്പോഴും AI ഇല്ലാതെ തന്നെ.</p>
     <ol class="small-t">
-      <li><span data-i="ai_step1a">Ollama എന്ന സൗജന്യ പ്രോഗ്രാം ഇൻസ്റ്റാൾ ചെയ്യുക:</span> <code>ollama.com</code></li>
-      <li><span data-i="ai_step2a">ഒരു കറുത്ത ജാലകത്തിൽ (Command Prompt) ഇത് ഒരിക്കൽ ഓടിക്കുക, ചിത്രം കാണാൻ കഴിയുന്ന ഒരു മോഡൽ ഡൗൺലോഡ് ആകും (ഏകദേശം 3 GB):</span> <code>ollama pull gemma3:4b</code></li>
-      <li data-i="ai_step3">ഇവിടെ താഴെ ആ മോഡൽ തിരഞ്ഞെടുക്കുക.</li>
+      <li><span data-i="ai_easy">എളുപ്പ വഴി: ClipFinder അടച്ച്</span> <code>setup_windows.bat</code> <span data-i="ai_easy2">ഒരിക്കൽ കൂടി ഓടിക്കുക. അവസാന ഘട്ടം AI ഇറക്കി വയ്ക്കും (ഏകദേശം 3.5 GB, ഒരിക്കൽ മാത്രം). വേറെ ഒന്നും ഇൻസ്റ്റാൾ ചെയ്യുകയോ തുറക്കുകയോ വേണ്ട.</span></li>
+      <li><span data-i="ai_other">അല്ലെങ്കിൽ നിങ്ങളുടെ സ്വന്തം Ollama (</span><code>ollama pull gemma3:4b</code><span data-i="ai_other2">) അല്ലെങ്കിൽ LM Studio (local server ഓൺ ചെയ്ത്) ഉപയോഗിക്കാം.</span></li>
+      <li data-i="ai_step3">ഇവിടെ താഴെ മോഡൽ തിരഞ്ഞെടുക്കുക. local/gemma-3-4b = ഈ ആപ്പിന്റെ സ്വന്തം AI.</li>
     </ol>
     <div class="row wrap"><label for="ai-model" class="small-t" data-i="ai_model">മോഡൽ</label>
       <select id="ai-model" class="text ai-select"></select>

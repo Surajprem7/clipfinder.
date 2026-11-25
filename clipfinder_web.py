@@ -836,11 +836,13 @@ class App:
             return {"current": cf.__version__, "latest": None, "newer": False}
         return upd.check(cf.__version__)
 
-    # ---- AI helper on this computer (clipfinder_ai.py talks to Ollama on 127.0.0.1 only)
+    # ---- AI helper on this computer (clipfinder_ai.py: the app's own llama.cpp, LM Studio or Ollama, 127.0.0.1 only)
     def ai_info(self) -> dict:
         st = ai.status()
         saved = load_prefs(self.store.root)["ai_model"]
-        return {**st, "model": saved if saved in st["models"] else ""}
+        if saved not in st["models"]:
+            saved = ai.LOCAL_MODEL if ai.LOCAL_MODEL in st["models"] else ""   # set up by setup_windows.bat: just works
+        return {**st, "model": saved}
 
     def ai_set_model(self, model) -> dict:
         if model != "" and (not isinstance(model, str) or not ai.MODEL_RE.fullmatch(model) or model not in ai.status()["models"]):
@@ -1429,6 +1431,7 @@ class Server(ThreadingHTTPServer):
 def make_server(store: Store, port: int = 8765, token: str | None = None, verbose: bool = False,
                 remote_host: str | None = None):
     """Bind to 127.0.0.1 only; if the port is taken try the next ones. Returns (server, app)."""
+    ai.configure(store.root)          # the app's own AI files (if set up) are in <data>/ai
     last = None
     for p in range(port, port + 20) if port else [0]:
         try:
@@ -1500,6 +1503,7 @@ def main(argv=None) -> int:
         pass
     finally:
         cf.CANCEL.set()
+        ai.shutdown()
         srv.server_close()
     return 0
 
